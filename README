@@ -1,0 +1,3 @@
+This project is to create a set of python wrappers for the B&K orbfit program. 
+
+Current we have a simple wrapper set built but a more direct push to the libraries would be a good evolution
