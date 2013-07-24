@@ -6,6 +6,92 @@
 #include "orbfit.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
+
+static PyObject *orbfit_fitradec(PyObject *self, PyObject *args)
+     //char *mpc_file
+{
+  const char *mpc_filename;
+  const char *abg_filename;
+  const char *res_filename;
+
+  FILE *abg_file;
+  FILE *mpc_file;
+  FILE *res_file;
+
+  OBSERVATION obsarray[MAXOBS];
+  int     nobs;
+
+
+  ORBIT orbit;
+  PBASIS p;
+  XVBASIS xv;
+  
+  double **covar;
+  double chisq;
+  int i; 
+  int dof;
+
+  if (!PyArg_ParseTuple(args, "sss", &mpc_filename, &abg_filename, &res_filename ))
+    return NULL;
+
+  covar = dmatrix(1,6,1,6);
+
+
+  if (read_radec(obsarray, mpc_filename, &nobs)) {
+    fprintf(stderr, "Error reading input observations\n");
+    return NULL ;
+  }
+  
+  /* Call subroutine to do the actual fitting: */
+  fit_observations(obsarray, nobs, &p, covar, &chisq, &dof,stdout);
+
+  abg_file = fopen(abg_filename,"w");
+
+  fprintf(abg_file, "# Chi-squared of fit: %.2f DOF: %d\n",chisq,dof);
+  fprintf(abg_file, "# Exact a, adot, b, bdot, g, gdot:\n");
+  fprintf(abg_file, "%11.8f %11.8f %11.8f %11.8f %11.8f %11.8f\n",p.a,p.adot,p.b,
+  	p.bdot, p.g, p.gdot);
+  pbasis_to_bary(&p, &xv, NULL);
+
+  orbitElements(&xv, &orbit);
+  fprintf(abg_file, "# a=%lf AU,e=%lf,i=%lf deg\n",orbit.a, orbit.e, orbit.i);
+  {
+    double d, dd;
+    d = sqrt(xBary*xBary + yBary*yBary + pow(zBary-1/p.g,2.));
+    dd = d*d*sqrt(covar[5][5]);
+    fprintf(abg_file, "# Barycentric distance %.3f+-%.3f\n",d,dd);
+  }
+
+  /* Print the covariance matrix to stdout */
+  fprintf(abg_file, "# Covariance matrix: \n");
+  print_matrix(abg_file,covar,6,6);
+
+  /* Print out information on the coordinate system */
+  fprintf(abg_file, "#     lat0       lon0       xBary     yBary      zBary   JD0\n");
+  fprintf(abg_file, "%12.7f %12.7f %10.7f %10.7f %10.7f  %.6f\n",
+	 lat0/DTOR,lon0/DTOR,xBary,yBary,zBary,jd0);
+
+  /* Dump residuals to stderr */
+  res_file = fopen(res_filename,"w");
+  fprintf(res_file,"Best fit orbit gives:\n");
+  fprintf(res_file,"obs  time        x      x_resid       y   y_resid\n");
+  for (i=0; i<nobs; i++) {
+    double x,y;
+    kbo2d(&p, &obsarray[i], &x, NULL, &y, NULL);
+    fprintf(res_file,"%3d %9.4f %10.3f %7.3f %10.3f %7.3f\n",
+	    i, obsarray[i].obstime,
+	    obsarray[i].thetax/ARCSEC, (obsarray[i].thetax-x)/ARCSEC,
+	    obsarray[i].thetay/ARCSEC, (obsarray[i].thetay-y)/ARCSEC);
+  }
+
+  free_dmatrix(covar,1,6,1,6);
+  return Py_BuildValue("fffff",orbit.a, orbit.e, orbit.i, orbit.lan, orbit.aop, orbit.T);
+
+} 
+
+  
+  
 
 static PyObject *orbfit_predict(PyObject *self, PyObject *args)
      //char *abg_file, float jdate, int obscode)
@@ -40,7 +126,7 @@ static PyObject *orbfit_predict(PyObject *self, PyObject *args)
  
   if (read_abg(abg_file,&p,covar) ) { 
     fprintf(stderr, "Error input alpha/beta/gamma file %s\n",abg_file);
-    return(NULL);
+    return NULL;
   }
 
   /* get observatory code */
@@ -106,12 +192,14 @@ static PyObject *orbfit_predict(PyObject *self, PyObject *args)
 static PyMethodDef OrbfitMethods[] = {
     {"predict",  orbfit_predict, METH_VARARGS,
      "Given an ABG_FILE, JDATE, OBS_CODE return the objects location."},
+    {"fit_radec", orbfit_fitradec, METH_VARARGS,
+     "Given an MPC_FILE as input write to ABG_FILE and RES_FILE."},
     {NULL, NULL, 0, NULL}        /* Sentinel */
 };
 
-PyMODINIT_FUNC initorbfit(void)
+PyMODINIT_FUNC initbk_orbfit(void)
 {
-  (void) Py_InitModule("orbfit",OrbfitMethods);
+  (void) Py_InitModule("bk_orbfit",OrbfitMethods);
 }
 
 
