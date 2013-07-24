@@ -161,7 +161,7 @@ void Read_Coefficients( double Time )
      {
        printf("\n  In: Read_Coefficients \n");
        printf("\n      ARRAY_SIZE = %4d",ARRAY_SIZE);
-       printf("\n      Offset  = %3d",Offset);
+       printf("\n      Offset  = %3ld",Offset);
        printf("\n      T_delta = %7.3f",T_delta);
        printf("\n      T_Beg   = %7.3f",T_beg);
        printf("\n      T_End   = %7.3f",T_end);
@@ -337,9 +337,9 @@ void Interpolate_Position( double Time , int Target , double Position[3] )
      {
        printf("\n  In: Interpolate_Position\n");
        printf("\n  Target = %2d",Target);
-       printf("\n  C      = %4d (before)",C);
-       printf("\n  N      = %4d",N);
-       printf("\n  G      = %4d\n",G);
+       printf("\n  C      = %4ld (before)",C);
+       printf("\n  N      = %4ld",N);
+       printf("\n  G      = %4ld\n",G);
      }
 
   /*--------------------------------------------------------------------------*/
@@ -384,8 +384,8 @@ void Interpolate_Position( double Time , int Target , double Position[3] )
 
   if ( Debug )
      {
-       printf("\n  C      = %4d (after)",C);
-       printf("\n  offset = %4d",offset);
+       printf("\n  C      = %4ld (after)",C);
+       printf("\n  offset = %4ld",offset);
        printf("\n  Time   = %12.7f",Time);
        printf("\n  T_sub  = %12.7f",T_sub);
        printf("\n  T_seg  = %12.7f",T_seg);
@@ -473,9 +473,9 @@ void Interpolate_State(double Time,
      {
        printf("\n  In: Interpolate_State\n");
        printf("\n  Target = %2d",Target);
-       printf("\n  C      = %4d (before)",C);
-       printf("\n  N      = %4d",N);
-       printf("\n  G      = %4d\n",G);
+       printf("\n  C      = %4ld (before)",C);
+       printf("\n  N      = %4ld",N);
+       printf("\n  G      = %4dd\n",G);
      }
 
   /*--------------------------------------------------------------------------*/
@@ -520,8 +520,8 @@ void Interpolate_State(double Time,
 
   if ( Debug )
      {
-       printf("\n  C      = %4d (after)",C);
-       printf("\n  offset = %4d",offset);
+       printf("\n  C      = %4ld (after)",C);
+       printf("\n  offset = %4ld",offset);
        printf("\n  Time   = %12.7f",Time);
        printf("\n  T_sub  = %12.7f",T_sub);
        printf("\n  T_seg  = %12.7f",T_seg);
