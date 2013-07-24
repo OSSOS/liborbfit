@@ -220,6 +220,16 @@ prelim_fit(OBSERVATION obsarray[],
 	   PBASIS *pout,
 	   double **covar);
 
+/* fit the observations */
+int
+fit_observations(OBSERVATION obsarray[],
+                 int nobs,
+                 PBASIS *p,
+                 double **covar,
+                 double *chisq,
+                 int *dof,
+                 FILE *logfile);
+
 /* Routine to predict position and uncertainty at any time, given
  * a PBASIS fit and a sigma matrix.
  */
