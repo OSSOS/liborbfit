@@ -6,35 +6,25 @@ CFLAGS=-fPIC -ansi -pedantic -Wall -Wextra -I. -Dlint -Wno-unused-parameter -Wno
 
 LIBS=-lm -lc
 
-prefix= "/usr/local"
+prefix=/usr/local
 bindir=$(prefix)/bin
 libdir=$(prefix)/lib
 incdir=$(prefix)/include
+srcdir=src
+SOURCE := $(wildcard $(srcdir)/*.c)
+INCS=$(srcdir)/*.h
 
-OBJ=covsrt.o \
-	dms.o	\
-	ephem_earth.o \
-	gasdev.o \
-	gaussj.o \
-	lubksb.o \
-	ludcmp.o \
-	mrqcof_orbit.o \
-	mrqmin_orbit.o \
-	nrutil.o \
-	orbfit1.o \
-	orbfit2.o \
-	ran1.o \
-	transforms.o \
-	orbfitmodule.o
+OBJ=$(SOURCE:.c=.o)
+
+.PHONY:	all
 
 all: liborbfit
+	@echo $(OBJ)
 
-INCS=ephem_read.h ephem_types.h nrutil.h orbfit.h 
-
-%o: %c $(INCS) 
+%.o: %.c $(INCS)
 	$(CC) -c -o $@ $< $(CFLAGS) 
 
-liborbfit: $(OBJ)
+liborbfit: $(OBJ) 
 	$(CC) -shared -o liborbfit.so $(OBJ)
 
 
@@ -42,3 +32,7 @@ install: all
 	$(INSTALL) liborbfit.so $(libdir)
 	$(INSTALL) $(INCS) $(incdir)
 
+
+clean:
+	\rm $(OBJ)
+	\rm liborbfit.so
