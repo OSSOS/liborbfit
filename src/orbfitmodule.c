@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-int fitradec(char *mpc_filename, char *abg_filename, char *res_filename)
+double *fitradec(char *mpc_filename, char *abg_filename)
 {
 
   FILE *abg_file ;
@@ -17,7 +17,7 @@ int fitradec(char *mpc_filename, char *abg_filename, char *res_filename)
   XVBASIS xv;
 
   double d, dd;
-
+  double result[2];
   double **covar;
   double chisq;
   int i; 
@@ -35,24 +35,25 @@ int fitradec(char *mpc_filename, char *abg_filename, char *res_filename)
   fit_observations(obsarray, nobs, &p, covar, &chisq, &dof,stdout);
 
 
-  /* write the fit to the agbfile */
-  abg_file = fopen(abg_filename,"w");
-
-  fprintf(abg_file, "# Chi-squared of fit: %.2f DOF: %d\n",chisq,dof);
-  fprintf(abg_file, "# Exact a, adot, b, bdot, g, gdot:\n");
-  fprintf(abg_file, "%11.8f %11.8f %11.8f %11.8f %11.8f %11.8f\n",p.a,p.adot,p.b,
+  fprintf(stderr, "# Chi-squared of fit: %.2f DOF: %d\n",chisq,dof);
+  fprintf(stderr, "# Exact a, adot, b, bdot, g, gdot:\n");
+  fprintf(stderr, "%11.8f %11.8f %11.8f %11.8f %11.8f %11.8f\n",p.a,p.adot,p.b,
   	p.bdot, p.g, p.gdot);
   pbasis_to_bary(&p, &xv, NULL);
 
   orbitElements(&xv, &orbit);
-  fprintf(abg_file, "# a=%f AU,e=%f,i=%f deg\n",orbit.a, orbit.e, orbit.i);
+  fprintf(stderr, "# a=%f AU,e=%f,i=%f deg\n",orbit.a, orbit.e, orbit.i);
   d = sqrt(xBary*xBary + yBary*yBary + pow(zBary-1/p.g,2.));
   dd = d*d*sqrt(covar[5][5]);
-  fprintf(abg_file, "# Barycentric distance %.3f+-%.3f\n",d,dd);
+  fprintf(stderr, "# Barycentric distance %.3f+-%.3f\n",d,dd);
 
   /* Print the covariance matrix to the agb_file */
   fprintf(abg_file, "# Covariance matrix: \n");
   print_matrix(abg_file,covar,6,6);
+
+
+  /* write the covariance to the agbfile */
+  abg_file = fopen(abg_filename,"w");
 
   /* Print out information on the coordinate system */
   fprintf(abg_file, "#     lat0       lon0       xBary     yBary      zBary   JD0\n");
@@ -62,7 +63,7 @@ int fitradec(char *mpc_filename, char *abg_filename, char *res_filename)
   fclose(abg_file);
 
   /* Dump residuals to res_file */
-  res_file = fopen(res_filename,"w");
+  res_file = stderr;
   fprintf(res_file,"Best fit orbit gives:\n");
   fprintf(res_file,"obs  time        x      x_resid       y   y_resid\n");
   for (i=0; i<nobs; i++) {
@@ -73,10 +74,11 @@ int fitradec(char *mpc_filename, char *abg_filename, char *res_filename)
 	    obsarray[i].thetax/ARCSEC, (obsarray[i].thetax-x)/ARCSEC,
 	    obsarray[i].thetay/ARCSEC, (obsarray[i].thetay-y)/ARCSEC);
   }
-  fclose(res_file);
 
   free_dmatrix(covar,1,6,1,6);
-  return nobs;
+  result[0] = d;
+  result[1] = dd;
+  return result;
 }
 
 
@@ -171,4 +173,76 @@ double *predict(char *abg_file, double jdate, int obscode)
 
 }
 
+
+double *abg_to_aei(char *abg_file)
+{
+  PBASIS p;
+  XVBASIS xv;
+  ORBIT orbit;
+  static double result[12];
+  double  **covar_abg, **covar_xyz, **derivs, **covar_aei;
+
+  int	i,j;
+
+  covar_abg = dmatrix(1,6,1,6);
+  covar_xyz = dmatrix(1,6,1,6);
+  covar_aei = dmatrix(1,6,1,6);
+  derivs = dmatrix(1,6,1,6);
+
+  if (read_abg(abg_file,&p,covar_abg)) {
+    fprintf(stderr, "Error in input alpha/beta/gamma file\n");
+    exit(1);
+  }
+
+  /* Transform the orbit basis and get the deriv. matrix */
+  pbasis_to_bary(&p, &xv, derivs);
+
+  /* Map the covariance matrix to new basis */
+  covar_map(covar_abg, derivs, covar_xyz,6,6);
+
+  /* Get partial derivative matrix from xyz to aei */
+  aei_derivs(&xv, derivs);
+
+  /* Map the covariance matrix to new basis */
+  covar_map(covar_xyz, derivs, covar_aei,6,6);
+
+  /* Transform xyz basis to orbital parameters */
+  orbitElements(&xv, &orbit);
+
+
+  /* Print out the results, with comments */
+  /*
+  printf(aei_file,"# Barycentric osculating elements in ICRS at epoch %.1f:\n",jd0);
+  printf("#    a            e       i      Node   Arg of Peri   Time of Peri\n");
+  printf("%12.6f  %9.6f  %8.3f %8.3f  %8.3f %11.3f\n",
+  	 orbit.a, orbit.e, orbit.i, orbit.lan, orbit.aop, orbit.T);
+  fprintf("+-%10.6f  %9.6f  %8.3f %8.3f  %8.3f %11.3f\n",
+     sqrt(covar_aei[1][1]),
+  	 sqrt(covar_aei[2][2]),
+  	 sqrt(covar_aei[3][3])/DTOR,
+     sqrt(covar_aei[4][4])/DTOR,
+	 sqrt(covar_aei[5][5])/DTOR,
+	 sqrt(covar_aei[6][6])/DAY);
+  fprintf("# covariance matrix:\n");
+  fprint_matrix(stdout,covar_aei,6,6);
+  */
+  result[0] = orbit.a;
+  result[1] = orbit.e;
+  result[2] = orbit.i;
+  result[3] = orbit.Node;
+  result[4] = orbit.aop;
+  result[5] = orbit.T
+  result[6] = sqrt(covar_aei[1][1]);
+  result[7] = sqrt(covar_aei[2][2]);
+  result[8] = sqrt(covar_aei[3][3])/DTOR;
+  result[9] = sqrt(covar_aei[4][4])/DTOR;
+  result[10] = sqrt(covar_aei[5][5])/DTOR;
+  result[11] = sqrt(covar_aei[6][6])/DAY;
+
+  free_dmatrix(covar_abg,1,6,1,6);
+  free_dmatrix(covar_xyz,1,6,1,6);
+  free_dmatrix(covar_aei,1,6,1,6);
+  free_dmatrix(derivs,1,6,1,6);
+  return result;
+}
 
