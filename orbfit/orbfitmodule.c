@@ -85,7 +85,7 @@ int fitradec(char *mpc_filename, char *abg_filename, char *res_filename)
  * 8/12/99 gmb
  */
 
-double *predict(char *abg_file, float jdate, int obscode)
+double *predict(char *abg_file, double jdate, int obscode)
 {
 
   PBASIS p;
@@ -119,7 +119,6 @@ double *predict(char *abg_file, float jdate, int obscode)
     fprintf(stderr, "Error input alpha/beta/gamma file %s\n",abg_file);
     return result;
   }
-
 
 
   /* get observatory code */
