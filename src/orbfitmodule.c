@@ -17,7 +17,7 @@ double *fitradec(char *mpc_filename, char *abg_filename)
   XVBASIS xv;
 
   double d, dd;
-  double result[2];
+  static double result[2];
   double **covar;
   double chisq;
   int i; 
@@ -28,7 +28,7 @@ double *fitradec(char *mpc_filename, char *abg_filename)
 
   if (read_radec(obsarray, mpc_filename, &nobs)) {
     fprintf(stderr, "Error reading input observations\n");
-    return -1 ;
+    return result ;
   }
   
   /* Call subroutine to do the actual fitting: */
@@ -229,9 +229,9 @@ double *abg_to_aei(char *abg_file)
   result[0] = orbit.a;
   result[1] = orbit.e;
   result[2] = orbit.i;
-  result[3] = orbit.Node;
+  result[3] = orbit.lan;
   result[4] = orbit.aop;
-  result[5] = orbit.T
+  result[5] = orbit.T;
   result[6] = sqrt(covar_aei[1][1]);
   result[7] = sqrt(covar_aei[2][2]);
   result[8] = sqrt(covar_aei[3][3])/DTOR;
