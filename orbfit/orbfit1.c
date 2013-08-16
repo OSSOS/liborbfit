@@ -16,6 +16,7 @@ encounter in the future.
 #include "orbfit.h"
 #include <string.h>
 #include "ephem_types.h"
+#include <ctype.h>
 
 /* Create the variables which define the coordinate system */
 double	lat0, lon0;	/* ecliptic lat & lon of tangent point */
@@ -23,6 +24,8 @@ double	xBary, yBary, zBary;	/*Posn of barycenter in our system*/
 double	jd0;		/* Zeropoint of time scale */
 
 double mpc_dtheta=DEFAULT_DTHETA;	/*default astrometric error*/
+
+int invert_matrix(double **, double **, int);
 
 void
 set_mpc_dtheta(double d) {
@@ -251,15 +254,21 @@ read_radec(OBSERVATION obsarray[], char *fname, int *nobs)
 
     eq_to_ec(obs->thetax,obs->thetay,&elat,&elon,NULL);
 
+
     if (*nobs==1) {
       double xec, yec, zec;
       /* Use first observation to set the reference frame */
       jd0 = obs->obstime;
       lat0 = elat;
       lon0 = elon;
-      
+
+
+      /* fprintf(stderr, "%f %f %f %d\n", elat, elon, obs->obstime, obs->obscode); */
+
       /* Find location of SSBARY wrt observatory at zero time */
       earth_ssbary(jd0, obs->obscode, &xBary, &yBary, &zBary);
+
+      /* fprintf(stderr, "%f %f %f %d\n", elat, elon, obs->obstime, obs->obscode); */
 
       /* Negate the vector to make it earth->SSBARY*/
       /* And rotate equatorial into the tangent-point coords */
@@ -267,7 +276,7 @@ read_radec(OBSERVATION obsarray[], char *fname, int *nobs)
       xyz_eq_to_ec(xBary, yBary, zBary, &xec, &yec, &zec,NULL);
       xyz_ec_to_proj(xec, yec, zec, &xBary, &yBary, &zBary, lat0, lon0, NULL);
     }
-
+    /* fprintf(stderr,"%f %f", lat0, lon0); */
     /* Set time to years after jd0, rotate to tangent plane coords */
     obs->obstime = (obs->obstime-jd0)*DAY;
     ec_to_proj(elat,elon,&(obs->thetax),&(obs->thetay),

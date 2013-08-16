@@ -105,10 +105,12 @@ int nrl,nrh,ncl,nch;
 	return m;
 }
 
-float **submatrix(a,oldrl,oldrh,oldcl,oldch,newrl,newcl)
+float **submatrix(a, oldrl, oldrh, oldcl, oldch, newrl, newcl)
 /* point a submatrix [newrl..][newcl..] to a[oldrl..oldrh][oldcl..oldch] */
-float **a;
-int oldrl,oldrh,oldcl,oldch,newrl,newcl;
+float **a; 
+int oldrl,oldrh,oldcl;
+int oldch;
+int newrl,newcl;
 {
 	int i,j;
 	float **m;

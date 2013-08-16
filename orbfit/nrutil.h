@@ -13,3 +13,5 @@ void free_dmatrix();
 void free_imatrix();
 void free_submatrix();
 void nrerror();
+void lubksb();
+

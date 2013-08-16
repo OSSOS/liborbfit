@@ -9,14 +9,14 @@
 #define MAXOBS  4000    
 
 /*Default name of binary DE405 ephemeris data:*/
-#define DEFAULT_EPHEM_FILE "binEphem.405" 
+#define DEFAULT_EPHEM_FILE "data/binEphem.405"
 /*Or override the above by looking for filename under
  * this environment variable:
  */
 #define EPHEM_ENVIRON "ORBIT_EPHEMERIS"
 
 /*Name of observatory location file:*/
-#define DEFAULT_OBSERVATORY_FILE "observatories.dat"
+#define DEFAULT_OBSERVATORY_FILE "data/observatories.dat"
 /*Or override the above by looking for filename under
  * this environment variable:
  */
@@ -157,6 +157,12 @@ observatory_geocenter(double jd,
  * in default/environment places.*/
 void
 read_observatories(char *fname);
+
+/* Read the contents of an abg fromated file. */
+int
+read_abg(char *fname,
+	 PBASIS *p,
+	 double **covar);
 
 /* Angle (radians) from zenith to the limb/horizon */
 double

@@ -1,6 +1,7 @@
 /* 	$Id: ephem_earth.c,v 1.1 2006/11/22 20:31:50 observe Exp $	 */
+/* 	$Id: ephem_earth.c,v 1.1 2006/11/22 20:31:50 observe Exp $	 */
 #ifndef lint
-static char vcid[] = "$Id: ephem_earth.c,v 1.1 2006/11/22 20:31:50 observe Exp $";
+static char vcid[] = "$Id: ephem_earth.c,v 1.1 2006/11/22 20:31:50 observe Exp $"; 
 #endif /* lint */
 /*** ephem_earth.c  - I've changed the below to include a routine explicitly
 *** returning the location of earth geocenter relative to SSBARY.  Also
@@ -193,7 +194,7 @@ int Initialize_Ephemeris()
   int headerID;
   char fileName[FNAMESIZE];
   /*** gmb: don't duplicate this call */
-  static init=0;
+  static int init=0;
   if (init) return SUCCESS;
   init = 1;
 
@@ -475,7 +476,7 @@ void Interpolate_State(double Time,
        printf("\n  Target = %2d",Target);
        printf("\n  C      = %4ld (before)",C);
        printf("\n  N      = %4ld",N);
-       printf("\n  G      = %4dd\n",G);
+       printf("\n  G      = %4ld\n",G);
      }
 
   /*--------------------------------------------------------------------------*/
@@ -617,7 +618,7 @@ lst(double jd,
 	   p.359, 1982.  On workstations, accuracy (numerical only!)
 	   is about a millisecond in the 1990s. */
 
-	double t, ut, jdmid, jdint, jdfrac, sid_g, sid;
+	double t, ut, jdmid, jdint, jdfrac, sid_g;
 	long jdin, sid_int;
 
 	jdin = jd;         /* fossil code from earlier package which
@@ -697,16 +698,18 @@ earth_ssbary(double jd,
   /* Use Horizons to get the coordinates of geocenter */
   geocenter_ssbary(jd,xgeo);
 
-  /*fprintf(stderr,"geocenter ICRS:  %g %g %g\n",xgeo[0],xgeo[1],xgeo[2]);*/
+
+  /* fprintf(stderr,"geocenter ICRS:  %g %g %g\n",xgeo[0],xgeo[1],xgeo[2]); */
   /* Now get the geocenter->observatory vector */
   observatory_geocenter(jd, obscode, &xobs, &yobs, &zobs);
 
-  /*fprintf(stderr,"observ ICRS:  %g %g %g\n", xobs, yobs, zobs);*/
+  /* fprintf(stderr,"observ ICRS:  %g %g %g\n", xobs, yobs, zobs); */
 
   /* Add in to give observatory coords in ICRS */
   *xtopo = xgeo[0] + xobs;
   *ytopo = xgeo[1] + yobs;
   *ztopo = xgeo[2] + zobs;
+
 
   return;
 }
@@ -719,8 +722,11 @@ observatory_geocenter(double jd,
 		      double *yobs,
 		      double *zobs) {
 
-  if (nsites<=0 && nspacecraft<=0) read_observatories(NULL); 
+  /* fprintf(stderr, "Reading site entries\n"); */
 
+  if (nsites<=0 && nspacecraft<=0) read_observatories(NULL);
+
+  /* fprintf(stderr, "Read entries for %i sites\n", nsites); */
   if (obscode < OBSCODE_ORBITAL) {
     /* This is a ground-based observatory */
     double	obslat, obslon, obsalt, obslmst;	/*observatory info*/
@@ -787,10 +793,11 @@ observatory_geocenter(double jd,
 void
 read_observatories(char *fname)
 {
-  int i;
+
   FILE *sitefile;
   char  inbuff[BUFFSIZE], latstring[40], lonstring[40];
-  int nchar, obscode;
+  int nchar;
+  int obscode;
   char fileName[FNAMESIZE];
 
   extern double dmsdeg(char *string);
@@ -811,6 +818,7 @@ read_observatories(char *fname)
     strncpy(fileName, DEFAULT_OBSERVATORY_FILE, FNAMESIZE-1);
   
   fileName[FNAMESIZE-1]=0;
+  /* fprintf(stderr,"Loading from %s\n", fileName); */
 
   if ((sitefile = fopen(fileName,"r"))==NULL) {
     fprintf(stderr,"Error opening observatories file %s\n",fileName);
@@ -818,7 +826,8 @@ read_observatories(char *fname)
   }
 
   while (fgets_nocomment(inbuff, BUFFSIZE-1, sitefile, NULL)!=NULL) {
-    if (sscanf(inbuff, "%d", &obscode)!=1) {
+    /* fprintf(stderr,"%s\n", inbuff); */
+    if (sscanf(inbuff, "%i", &obscode)!=1) {
       fprintf(stderr,"Bad line in obseratories file %s:\n->%s\n",
 	      fileName, inbuff);
       exit(1);
@@ -833,7 +842,8 @@ read_observatories(char *fname)
 		fileName, inbuff);
 	exit(1);
       }
-      if (nchar<strlen(inbuff)) {
+      /* fprintf(stderr, "nchar: %i, strlen: %i\n",nchar, (int) strlen(inbuff)); */
+      if (nchar<(int) strlen(inbuff)) {
 	int nn;
 	nn = strcspn(inbuff+nchar,"\n");
 	if (nn>=80) nn=79;
@@ -850,7 +860,7 @@ read_observatories(char *fname)
       /* This is an orbiting observatory */
       SPACECRAFT *sss;
       sss = &(spacecraftlist[nspacecraft]);
-      if (sscanf(inbuff,"%d %s %lf %lf %lf %s %n", 
+      if (sscanf(inbuff,"%d %s %lf %lf %lf %s %d", 
 		 &(sss->code), lonstring, &(sss->P),
 		 &(sss->precess), &(sss->jd0), latstring, 
 		 &nchar)!=6) {
@@ -858,7 +868,7 @@ read_observatories(char *fname)
 		fileName, inbuff);
 	exit(1);
       }
-      if (nchar<strlen(inbuff)) {
+      if (nchar<(int)strlen(inbuff)) {
 	int nn;
 	nn = strcspn(inbuff+nchar,"\n");
 	if (nn>=80) nn=79;

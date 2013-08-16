@@ -79,8 +79,8 @@ fit_observations(OBSERVATION obsarray[],
   if (fitparms==6) {
     if (logfile!=NULL) {
       fprintf(logfile,"#  Preliminary a, adot, b, bdot, g, gdot:\n");
-      fprintf(logfile,"#  %lf %lf %lf %lf %lf %lf\n",p->a,p->adot,p->b,
-	    p->bdot, p->g, p->gdot);  
+      fprintf(logfile,"#  %f %f %f %f %f %f\n",(float)p->a,(float)p->adot,(float)p->b,
+	      (float)p->bdot, (float)p->g,(float)p->gdot);  
     }
     /* Prepare for the first Marquandt minimization */
     for (i=1; i<=6; i++) ia[i]=1;

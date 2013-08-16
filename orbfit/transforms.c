@@ -490,7 +490,7 @@ elements_to_xv(ORBIT *o,
     fmid= x2 - o->e * sin(x2) - meanAnomaly;
     if (f*fmid > 0.0) {
       fprintf(stderr,"Error, eccentricAnomaly root not bracketed\n");
-      fprintf(stderr,"f, fmid % %f\n",f,fmid);
+      fprintf(stderr,"f, fmid %f %f\n",f,fmid);
       exit(1);
     }
 
