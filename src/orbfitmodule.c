@@ -32,28 +32,31 @@ double *fitradec(char *mpc_filename, char *abg_filename)
   }
   
   /* Call subroutine to do the actual fitting: */
-  fit_observations(obsarray, nobs, &p, covar, &chisq, &dof,stdout);
+  fit_observations(obsarray, nobs, &p, covar, &chisq, &dof, NULL);
 
 
-  fprintf(stderr, "# Chi-squared of fit: %.2f DOF: %d\n",chisq,dof);
-  fprintf(stderr, "# Exact a, adot, b, bdot, g, gdot:\n");
-  fprintf(stderr, "%11.8f %11.8f %11.8f %11.8f %11.8f %11.8f\n",p.a,p.adot,p.b,
+  abg_file = fopen(abg_filename,"w");
+
+  /* fprintf(stderr, "# Chi-squared of fit: %.2f DOF: %d\n",chisq,dof); */
+  fprintf(abg_file, "# Exact a, adot, b, bdot, g, gdot:\n");
+  fprintf(abg_file, "%11.8f %11.8f %11.8f %11.8f %11.8f %11.8f\n",p.a,p.adot,p.b,
   	p.bdot, p.g, p.gdot);
   pbasis_to_bary(&p, &xv, NULL);
 
   orbitElements(&xv, &orbit);
-  fprintf(stderr, "# a=%f AU,e=%f,i=%f deg\n",orbit.a, orbit.e, orbit.i);
+  /* fprintf(stderr, "# a=%f AU,e=%f,i=%f deg\n",orbit.a, orbit.e, orbit.i); */
   d = sqrt(xBary*xBary + yBary*yBary + pow(zBary-1/p.g,2.));
   dd = d*d*sqrt(covar[5][5]);
-  fprintf(stderr, "# Barycentric distance %.3f+-%.3f\n",d,dd);
+  /* fprintf(stderr, "# Barycentric distance %.3f+-%.3f\n",d,dd); */
 
   /* Print the covariance matrix to the agb_file */
+  /* write the covariance to the agbfile */
+
   fprintf(abg_file, "# Covariance matrix: \n");
+
   print_matrix(abg_file,covar,6,6);
 
 
-  /* write the covariance to the agbfile */
-  abg_file = fopen(abg_filename,"w");
 
   /* Print out information on the coordinate system */
   fprintf(abg_file, "#     lat0       lon0       xBary     yBary      zBary   JD0\n");
@@ -63,6 +66,7 @@ double *fitradec(char *mpc_filename, char *abg_filename)
   fclose(abg_file);
 
   /* Dump residuals to res_file */
+  /*
   res_file = stderr;
   fprintf(res_file,"Best fit orbit gives:\n");
   fprintf(res_file,"obs  time        x      x_resid       y   y_resid\n");
@@ -74,6 +78,7 @@ double *fitradec(char *mpc_filename, char *abg_filename)
 	    obsarray[i].thetax/ARCSEC, (obsarray[i].thetax-x)/ARCSEC,
 	    obsarray[i].thetay/ARCSEC, (obsarray[i].thetay-y)/ARCSEC);
   }
+  */
 
   free_dmatrix(covar,1,6,1,6);
   result[0] = d;
