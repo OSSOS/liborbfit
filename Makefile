@@ -13,7 +13,7 @@ incdir=$(prefix)/include
 srcdir=src
 SOURCE := $(wildcard $(srcdir)/*.c)
 INCS=$(srcdir)/*.h
-
+DATA=binEphem.405 observatories.dat
 OBJ=$(SOURCE:.c=.o)
 
 .PHONY:	all
@@ -31,6 +31,7 @@ liborbfit: $(OBJ)
 install: all
 	$(INSTALL) liborbfit.so $(libdir)
 	$(INSTALL) $(INCS) $(incdir)
+	$(INSTALL) $(DATA) $(libdir)
 
 
 clean:
