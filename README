@@ -1,9 +1,10 @@
-This project is to create a set of python wrappers for the B&K orbfit program. 
+This project is to create a set of B&K libraries that can be called from python wrappers. 
 
-Current we have a simple wrapper set built but a more direct push to the libraries would be a good evolution
+Currently we build the library to and provide an example python usage.  
+
+More complete python classes are TBD. 
 
 Started working on this on 10=APR=2012
-
 
 INSTALL
 
@@ -12,3 +13,6 @@ Edit the Makefile and change the value of 'prefix' to indicate where you want to
 
 make 
 make install
+
+Have a look around to find the example script that calls these libraries inside python.
+
