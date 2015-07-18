@@ -1,11 +1,22 @@
-__author__ = 'jjk'
-"""
-An example script that creates a python binding to the orbfit library.
+from ossos import mpc
 
-"""
+__author__ = 'jjk'
+
 import ctypes
 import tempfile
-import sys
+from StringIO import StringIO
+
+import datetime
+import numpy
+
+try:
+    from astropy.coordinates import ICRSCoordinates
+except ImportError:
+    from astropy.coordinates import ICRS as ICRSCoordinates
+from astropy import units
+import math
+
+from .mpc import Time
 
 
 LIBORBFIT = "/usr/local/lib/liborbfit.so"
@@ -22,64 +33,54 @@ class Orbfit(object):
     This class provides orbital information derived by calling 'fit_radec'.
     """
 
-    def __init__(self, observations=None, name='', filename=None):
+    def __init__(self, observations):
         """
-        Given a set of observations compute the orbit using fit_radec
-        and provide methods for accessing that orbit.
+        Given a list of mpc.Observations, compute the orbit using fit_radec and provide methods for
+        accessing that orbit.
 
-        Requires at least 3 observations.
+        Requires at least 3 mpc.Observations in the list.
+        :rtype : Orbfit
         """
+        assert isinstance(observations, tuple) or isinstance(observations, list) or isinstance(observations,
+                                                                                               numpy.ndarray)
+
+        if len(observations) < 3:
+            raise OrbfitError()
         self.orbfit = ctypes.CDLL(LIBORBFIT)
-
-        if observations is None:
-            observations = open(filename).readlines()
+        self.dra = None
+        self.ddec = None
         self.observations = observations
-        self.name = name
         self._fit_radec()
 
+    def _fit_radec(self): 
 
-    @property
-    def observations(self):
-        return self._observations
+        _abg_file = tempfile.NamedTemporaryFile(suffix='.abg')
+        _mpc_file = tempfile.NamedTemporaryFile(suffix='.mpc')
 
-    @observations.setter
-    def observations(self, observations):
-        self._observations = []
-        for observation in observations:
-            self._observations.append(observation.split())
-
-    def _fit_radec(self):
-        """
-        call fit_radec of BK passing in the observations.
-
-        """
-
-        # call fitradec with mpcfile, abgfile, resfile
+        # call fit_radec with mpcfile and abgfile
         self.orbfit.fitradec.restype = ctypes.POINTER(ctypes.c_double * 2)
-        self.orbfit.fitradec.argtypes = [ ctypes.c_char_p, ctypes.c_char_p ]
-
-        mpc_file = tempfile.NamedTemporaryFile(suffix='.mpc')
-        for obs in self.observations:
-            jd = obs[0]
-            ra = obs[1]
-            dec = obs[2]
-            res = obs[3]
-            code = obs[4]
-            mpc_file.write("{} {} {} {} {}\n".format(jd, ra, dec, res, code))
-
-        mpc_file.seek(0)
-
-        self._abg = tempfile.NamedTemporaryFile()
-
-        result = self.orbfit.fitradec(ctypes.c_char_p(mpc_file.name),
-                                      ctypes.c_char_p(self._abg.name))
-
+        self.orbfit.fitradec.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+        for observation in self.observations:
+            assert isinstance(observation, mpc.Observation)
+            if observation.null_observation:
+                continue
+            obs = observation
+            self.name = observation.provisional_name
+            ra = obs.ra.replace(" ", ":")
+            dec = obs.dec.replace(" ", ":")
+            res = getattr(obs.comment,'plate_uncertainty',0.2)
+            _mpc_file.write("{} {} {} {} {}\n".format(obs.date.jd, ra, dec, res, 568, ))
+        _mpc_file.seek(0)
+        result = self.orbfit.fitradec(ctypes.c_char_p(_mpc_file.name),
+                                      ctypes.c_char_p(_abg_file.name))
         self.distance = result.contents[0]
         self.distance_uncertainty = result.contents[1]
 
+        # call abg_to_aei to get elliptical elements and their chi^2 uncertainty.
         self.orbfit.abg_to_aei.restype = ctypes.POINTER(ctypes.c_double * 12)
-        self.orbfit.abg_to_aei.argtypes = [ ctypes.c_char_p ]
-        result = self.orbfit.abg_to_aei(ctypes.c_char_p(self._abg.name))
+        self.orbfit.abg_to_aei.argtypes = [ctypes.c_char_p]
+        result = self.orbfit.abg_to_aei(ctypes.c_char_p(_abg_file.name))
+
         self.a = result.contents[0]
         self.da = result.contents[6]
         self.e = result.contents[1]
@@ -92,58 +93,154 @@ class Orbfit(object):
         self.dom = result.contents[10]
         self.T = result.contents[5]
         self.dT = result.contents[11]
+        _abg_file.seek(0)
+        self.abg = _abg_file.read()
 
+    @property
+    def residuals(self):
+        ## compute the residuals (from the given observations)
+        _residuals = ""
+        for observation in self.observations:
+            self.predict(observation.date)
+            coord1 = ICRSCoordinates(self.coordinate.ra, self.coordinate.dec)
+            coord2 = ICRSCoordinates(observation.coordinate.ra, self.coordinate.dec)
+            observation.ra_residual = float(coord1.separation(coord2).arcsec)
+            observation.ra_residual = (coord1.ra.degree - coord2.ra.degree) * 3600.0
+            coord2 = ICRSCoordinates(self.coordinate.ra, observation.coordinate.dec)
+            observation.dec_residual = float(coord1.separation(coord2).arcsec)
+            observation.dec_residual = (coord1.dec.degree - coord2.dec.degree) * 3600.0
+            _residuals += "{:1s}{:12s} {:+05.2f} {:+05.2f} # {}\n".format(
+                observation.null_observation, observation.date, observation.ra_residual, observation.dec_residual, observation)
+        return _residuals
+
+    @property
+    def arc_length(self):
+        dates = []
+        for observation in self.observations:
+            dates.append(observation.date.jd)
+        return max(dates) - min(dates)
 
     def __str__(self):
         """
 
         """
-        res = "{:>10s} {:>8s} {:>8s} {:>8s} {:>8s} {:>8s} {:>8s}\n".format(self.name, 
-                                                            "r (AU)",
-                                                            "a (AU)",
-                                                            "e",
-                                                            "Inc.",
-                                                            "Node",
-                                                            "peri.")
+
+        res = "{:>10s} {:>8s} {:>8s} {:>8s} {:>8s} {:>8s} {:>8s}\n".format(
+            self.observations[0].provisional_name.strip(' '),
+            "r (AU)",
+            "a (AU)",
+            "e",
+            "Inc.",
+            "Node",
+            "peri.")
         res += "{:>10s} {:8.2f} {:8.2f} {:8.2f} {:8.2f} {:8.2f} {:8.2f}\n".format("fit",
-                                                   self.distance,
-                                                   self.a,
-                                                   self.e,
-                                                   self.inc,
-                                                   self.Node,
-                                                   self.om)
+                                                                                  self.distance,
+                                                                                  self.a,
+                                                                                  self.e,
+                                                                                  self.inc,
+                                                                                  self.Node,
+                                                                                  self.om)
         res += "{:>10s} {:8.2f} {:8.2f} {:8.2f} {:8.2f} {:8.2f} {:8.2f}\n".format("uncert",
-                                                               self.distance_uncertainty,
-                                                               self.da,
-                                                               self.de,
-                                                               self.dinc,
-                                                               self.dNode,
-                                                               self.dom)
+                                                                                  self.distance_uncertainty,
+                                                                                  self.da,
+                                                                                  self.de,
+                                                                                  self.dinc,
+                                                                                  self.dNode,
+                                                                                  self.dom)
+
+        res += "{:>10s} {:8.2f} days ".format("arc", self.arc_length)
+        if self.dra is not None:
+            res += "ephemeris uncertainty: {:8.2f} {:8.2f} {:8.2f}".format(self.dra, self.ddec, self.pa)
+        res += "\n"
 
         return res
 
-    def predict(self, jd, obs_code=568):
+    def predict(self, date, obs_code=568, abg_file=None):
         """
-        use the bk predict method to compute the location of the
-        source on the given date.
+        use the bk predict method to compute the location of the source on the given date.
+        @param date: the julian date of interest or an astropy.core.time.Time object.
+        @param obs_code: the Minor Planet Center observatory location code (Mauna Kea: 568 is the default)
+
+        this methods sets the values of coordinate, dra (arcseconds), ddec (arcseconds), pa, (degrees) and date (str)
         """
+
+        if not isinstance(date, Time):
+            if isinstance(date, float):
+                try:
+                    date = Time(date, format='jd', scale='utc', precision=6)
+                except:
+                    date = None  # FIXME: this might blow up, not sure
+            else:
+                try:
+                    date = Time(date, format='jd', scale='utc', precision=6)
+                except ValueError:
+                    try:
+                        date = Time(date, format='mpc', scale='utc', precision=6)
+                    except ValueError:
+                        date = Time(date, scale='utc', precision=6)  # see if it can guess
+        if hasattr(self,'time'):
+	   dt = self.time - date
+           if math.fabs(dt.sec) < 10:
+              return
+        jd = ctypes.c_double(date.jd)
+        if abg_file is None:
+            abg_file = tempfile.NamedTemporaryFile(suffix='.abg')
+            abg_file.write(self.abg)
+            abg_file.seek(0)
         # call predict with agbfile, jdate, obscode
         self.orbfit.predict.restype = ctypes.POINTER(ctypes.c_double * 5)
-        self.orbfit.predict.argtypes = [ ctypes.c_char_p, ctypes.c_double, ctypes.c_int ]
-        predict = self.orbfit.predict(ctypes.c_char_p(self._abg.name),
+        self.orbfit.predict.argtypes = [ctypes.c_char_p, ctypes.c_double, ctypes.c_int]
+        predict = self.orbfit.predict(ctypes.c_char_p(abg_file.name),
                                       jd,
                                       ctypes.c_int(obs_code))
-
-        self.ra = predict.contents[0]
-        self.dec = predict.contents[1]
+        self.coordinate = ICRSCoordinates(predict.contents[0],
+                                          predict.contents[1],
+                                          unit=(units.degree, units.degree),
+                                          obstime=date)
         self.dra = predict.contents[2]
         self.ddec = predict.contents[3]
         self.pa = predict.contents[4]
-        self.date = str(time)
+        self.date = str(date)
+        self.time = date
 
+    def rate_of_motion(self, date):
+        # rate of motion at a requested date rather than averaged over the arc.
+        # Date is datetime.datetime() objects.
+        if isinstance(date, datetime.datetime):
+            sdate = date.strftime('%Y-%m-%d')
+            edate = (date + datetime.timedelta(1)).strftime('%Y-%m-%d')
+        else:
+            sdate = date.jd
+            edate = date.jd + 1
+        self.predict(edate)
+        coord1 = self.coordinate
+        self.predict(sdate)
+        coord2 = self.coordinate
+        retval = coord1.separation(coord2).arcsec / (24.)  # arcsec/hr
 
+        return retval
 
-if __name__ == '__main__':
+    def summarize(self, date=datetime.datetime.now()):
+        """Return a string summary of the orbit.
 
-    print Orbfit(filename='test_input.txt')
-    
+        """
+
+        assert isinstance(date, datetime.datetime)
+        at_date = date.strftime('%Y-%m-%d')
+        self.predict(at_date)
+
+        fobj = StringIO()
+
+        # for observation in self.observations:
+        # fobj.write(observation.to_string()+"\n")
+
+        fobj.write("\n")
+        fobj.write(str(self) + "\n")
+        fobj.write(str(self.residuals) + "\n")
+        fobj.write('arclen (days) {} '.format(self.arc_length))
+        fobj.write("Expected accuracy on {:>10s}: {:6.2f}'' {:6.2f}'' moving at {:6.2f} ''/hr\n\n".format(
+            at_date, self.dra, self.ddec, self.rate_of_motion(date=date)))
+
+        fobj.seek(0)
+        return fobj.read()
+
