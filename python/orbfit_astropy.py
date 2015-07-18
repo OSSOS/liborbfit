@@ -1,4 +1,3 @@
-
 __author__ = 'jjk'
 
 import ctypes
@@ -10,13 +9,11 @@ from StringIO import StringIO
 import tempfile
 
 from astropy.coordinates import SkyCoord
-
 from astropy import units
 from astropy.units.quantity import Quantity
 
 import mpc
 from mpc import Time
-
 
 LIBORBFIT = "/usr/local/lib/liborbfit.so"
 
@@ -199,7 +196,7 @@ class Orbfit(object):
         """
         Builds a summary of the residuals of a fit.  This is useful for visually examining the
         goodness of fit for a small number of observations and the impact of adding a few tentative observations.
-        :return: A string representation of the residuals between the best fit orbit and the astrometric measurements used.
+        :return: A string representation of the residuals between the best fit orbit and  astrometric measurements.
         :rtype: str
         """
         # # compute the residuals (from the given observations)
@@ -423,3 +420,24 @@ class Orbfit(object):
 
         fobj.seek(0)
         return fobj.read()
+
+
+def main():
+    """
+
+    :rtype : None
+    """
+    import mpc
+
+    mpc_filename = 'o3o08.mpc'
+    observations = mpc.MPCReader().read(mpc_filename)
+
+    orbit = Orbfit(observations)
+    print orbit
+    orbit.predict(2456500.5)
+    print orbit.coordinate.ra.deg, orbit.coordinate.dec.deg
+    orbit.predict('2013-07-27.0')
+    print orbit.coordinate.ra.deg, orbit.coordinate.dec.deg
+
+if __name__ == '__main__':
+    main()
