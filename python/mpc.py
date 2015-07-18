@@ -1,30 +1,15 @@
 __author__ = 'jjk, mtb55'
 
-import itertools
 import os
 import re
 import struct
 import sys
-import time
 import logging
-
-from datetime import datetime
-
-
-try:
-    from astropy.time import sofa_time
-except ImportError:
-    from astropy.time import erfa_time as sofa_time
-try:
-    from astropy.coordinates import ICRSCoordinates
-except ImportError:
-    from astropy.coordinates import ICRS as ICRSCoordinates
-from astropy.time import TimeString
-from astropy.time import Time
+from astropy.coordinates import SkyCoord
 from astropy import units
 import numpy
-
-import storage
+from .storage import open_vos_or_local
+from .util import Time
 
 
 DEFAULT_OBSERVERS = ['M. T. Bannister', 'J. J. Kavelaars']
@@ -93,6 +78,49 @@ MPCNOTES = {"Note1": {" ": " ",
                                "Z": "Photometry measurement failed."}}
 
 
+class MinorPlanetNumber(object):
+
+    PACKED_DESIGNATION = " ABCDEFGHJKLMNOPQRSTUVWXYZ"
+
+    def __init__(self, minor_planet_number):
+        self._minor_planet_number = None
+        if minor_planet_number is not None and len(minor_planet_number.strip(' ')) != 0:
+            if len(minor_planet_number) == 5:
+                if not minor_planet_number[0].isdigit():
+                    base = 100000 * (MinorPlanetNumber.PACKED_DESIGNATION.index(minor_planet_number[0]))
+                else:
+                    base = 10000 * int(minor_planet_number[0])
+                self._minor_planet_number = int(minor_planet_number[1:]) + base
+            else:
+                raise MPCFieldFormatError("minor_planet_number",
+                                          "1 char or digit and 4 digits",
+                                          minor_planet_number)
+
+
+    def __str__(self):
+        if self._minor_planet_number is None:
+            return ""
+        if self._minor_planet_number > 99999:
+            idx = int(self._minor_planet_number / 100000)
+            minor_planet_number = MinorPlanetNumber.PACKED_DESIGNATION[idx]
+            minor_planet_number += "{:04d}".format(self._minor_planet_number - idx * 100000)
+        else:
+            minor_planet_number = "{:05d}".format(self._minor_planet_number)
+        return minor_planet_number
+
+    def __int__(self):
+        return self._minor_planet_number
+
+    def __cmp__(self, other):
+        return cmp(int(self), int(other))
+
+    def __bool__(self):
+        return self._minor_planet_number is not None
+
+    def __nonzero__(self):
+        return self.__bool__()
+
+
 class NullObservation(object):
 
     NULL_OBSERVATION_CHARACTERS = ["!", "-", "#"]
@@ -101,12 +129,20 @@ class NullObservation(object):
         """
         A boolean object that keeps track of True/False status via a set of magic characters.
         """
+        if null_observation is not None and \
+                isinstance(null_observation, basestring) and \
+                len(null_observation.strip(' ')) > 0 and \
+                null_observation not in NullObservation.NULL_OBSERVATION_CHARACTERS:
+            raise MPCFieldFormatError("null_observation",
+                                      "one of " + str(NullObservation.NULL_OBSERVATION_CHARACTERS),
+                                      null_observation)
         if null_observation_character is None:
             null_observation_character = NullObservation.NULL_OBSERVATION_CHARACTERS[0]
         self.null_observation_character = null_observation_character
 
+        self._null_observation = None
         if isinstance(null_observation, basestring):
-            self._null_observation = str(null_observation)[0] in NullObservation.NULL_OBSERVATION_CHARACTERS
+            self._null_observation = null_observation in NullObservation.NULL_OBSERVATION_CHARACTERS
         elif isinstance(null_observation, bool):
             self._null_observation = null_observation
         else:
@@ -190,15 +226,15 @@ def format_ra_dec(ra_deg, dec_deg):
       formatted_ra: str
       formatted_dec: str
     """
-    coords = ICRSCoordinates(ra=ra_deg, dec=dec_deg,
-                             unit=(units.degree, units.degree))
+    coords = SkyCoord(ra=ra_deg, dec=dec_deg,
+                      unit=(units.degree, units.degree))
 
     # decimal=False results in using sexagesimal form
-    formatted_ra = coords.ra.format(unit=units.hour, decimal=False,
+    formatted_ra = coords.ra.to_string(unit=units.hour, decimal=False,
                                     sep=" ", precision=3, alwayssign=False,
                                     pad=True)
 
-    formatted_dec = coords.dec.format(unit=units.degree, decimal=False,
+    formatted_dec = coords.dec.to_string(unit=units.degree, decimal=False,
                                       sep=" ", precision=2, alwayssign=True,
                                       pad=True)
 
@@ -256,8 +292,6 @@ class MPCNote(object):
                                           "Must be a character",
                                           _code)
             if not 0 < int(_code) < 10:
-                print 0, _code, 10
-                print 0 < int(_code) < 10
                 raise MPCFieldFormatError(self.note_type,
                                           "numeric value must be between 0 and 9",
                                           _code)
@@ -340,110 +374,6 @@ class Discovery(object):
         return self.__bool__()
 
 
-class TimeMPC(TimeString):
-    """
-    Override the TimeString class to convert from MPC format string to astropy.time.Time object.
-
-    usage:
-
-    from astropy.time.core import Time
-    Time.FORMATS[TimeMPC.name] = TimeMPC
-
-    t = Time('2000 01 01.00001', format='mpc', scale='utc')
-
-    str(t) == '2000 01 01.000001'
-    """
-
-    name = 'mpc'
-    subfmts = (('mpc', '%Y %m %d', "{year:4d} {mon:02d} {day:02d}.{fracday:s}"),)
-
-    # ## need our own 'set_jds' function as the MPC Time string is not typical
-    def set_jds(self, val1, val2):
-        """
-
-        Parse the time strings contained in val1 and set jd1, jd2
-
-        :param val1: array of strings to parse into JD format
-        :param val2: not used for string conversions but passed regardless
-        """
-        n_times = len(val1)  # val1,2 already checked to have same len
-        iy = numpy.empty(n_times, dtype=numpy.intc)
-        im = numpy.empty(n_times, dtype=numpy.intc)
-        iday = numpy.empty(n_times, dtype=numpy.intc)
-        ihr = numpy.empty(n_times, dtype=numpy.intc)
-        imin = numpy.empty(n_times, dtype=numpy.intc)
-        dsec = numpy.empty(n_times, dtype=numpy.double)
-
-        # Select subformats based on current self.in_subfmt
-        subfmts = self._select_subfmts(self.in_subfmt)
-
-        for i, time_str in enumerate(val1):
-            # Assume that anything following "." on the right side is a
-            # floating fraction of a day.
-            try:
-                idot = time_str.rindex('.')
-            except:
-                fracday = 0.0
-            else:
-                time_str, fracday = time_str[:idot], time_str[idot:]
-                fracday = float(fracday)
-
-            for _, strptime_fmt, _ in subfmts:
-                try:
-                    tm = time.strptime(time_str, strptime_fmt)
-                except ValueError:
-                    pass
-                else:
-                    iy[i] = tm.tm_year
-                    im[i] = tm.tm_mon
-                    iday[i] = tm.tm_mday
-                    ihr[i] = tm.tm_hour + int(24 * fracday)
-                    imin[i] = tm.tm_min + int(60 * (24 * fracday - ihr[i]))
-                    dsec[i] = tm.tm_sec + 60 * (60 * (24 * fracday - ihr[i]) - imin[i])
-                    break
-            else:
-                raise ValueError("Time {0} does not match {1} format".format(time_str, self.name))
-
-        self.jd1, self.jd2 = sofa_time.dtf_jd(self.scale.upper().encode('utf8'),
-                                              iy, im, iday, ihr, imin, dsec)
-        return
-
-    def str_kwargs(self):
-        """
-
-        Generator that yields a dict of values corresponding to the
-
-        calendar date and time for the internal JD values.
-
-        Here we provide the additional 'fracday' element needed by 'mpc' format
-        """
-        iys, ims, ids, ihmsfs = sofa_time.jd_dtf(self.scale.upper()
-                                                 .encode('utf8'),
-                                                 6,
-                                                 self.jd1, self.jd2)
-
-        # Get the str_fmt element of the first allowed output subformat
-
-        _, _, str_fmt = self._select_subfmts(self.out_subfmt)[0]
-
-        yday = None
-        has_yday = '{yday:' in str_fmt or False
-
-        for iy, im, iday, ihmsf in itertools.izip(iys, ims, ids, ihmsfs):
-            ihr, imin, isec, ifracsec = ihmsf
-            if has_yday:
-                yday = datetime(iy, im, iday).timetuple().tm_yday
-
-            # MPC uses day fraction as time part of datetime
-            fracday = (((((ifracsec / 1000000.0 + isec) / 60.0 + imin) / 60.0) + ihr) / 24.0) * (10 ** 6)
-            fracday = '{0:06g}'.format(fracday)[0:self.precision]
-            yield dict(year=int(iy), mon=int(im), day=int(iday), hour=int(ihr), min=int(imin), sec=int(isec),
-                       fracsec=int(ifracsec), yday=yday, fracday=fracday)
-
-
-Time.FORMATS[TimeMPC.name] = TimeMPC
-
-
 def compute_precision(coord):
     """
     Returns the number of digits after the last '.' in a given number or string.
@@ -475,6 +405,7 @@ class Observation(object):
 
     def __init__(self,
                  null_observation=False,
+                 minor_planet_number=None,
                  provisional_name=None,
                  discovery=False,
                  note1=None,
@@ -515,9 +446,13 @@ class Observation(object):
         :type comment MPCComment
         """
         self._null_observation = False
+        self._minor_planet_number = None
+        self._provisional_name = None
+
         self.null_observation = null_observation
-        self._provisional_name = ""
+        self.minor_planet_number = minor_planet_number
         self.provisional_name = provisional_name
+
         self._discovery = None
         self.discovery = discovery
         self._note1 = None
@@ -554,7 +489,7 @@ class Observation(object):
                                     comment=comment)
 
     def __eq__(self, other):
-        return self.to_string() == other.to_string() 
+        return self.to_string() == other.to_string()
 
     def __ne__(self, other):
         return self.to_string() != other.to_string()
@@ -571,31 +506,101 @@ class Observation(object):
     def __gt__(self, other):
         return self.date > other.date
 
-    def _convert_ted(self):
+    @classmethod
+    def from_ted(cls, ted):
         """
-        2014 05  02.35552  18 47 39.503  -21 20 56.30  29.4R NI242     304
-        2014 05  04.36405  18 47 35.027  -21 20 55.50  28.8R NI242     304
-        2014 05  04.40415  18 47 34.936  -21 20 55.62  29.1R NI242     304
+        Turn a ted line into an MPC formatted line. (Marc Buie's format)
 
-        @return:
+        Example line: 2011 04  28.29389  18 32 37.260  -21 13 49.86  26.3R NI100     304
+        :param ted: a TED formatted minor planet observations
+        :return: Observation
         """
+        ted = ted.strip()
+        if len(ted) != len('2011 04  28.29389  18 32 37.260  -21 13 49.86  26.3R NI100     304'):
+            raise ValueError("Incorrectly formatted line for ted to mpc conversion.")
+        line_order = ["date", "ra", "dec", "mag", "filter", "provisional_name", "observatory_code"]
+        parts = {"date": "2011 04  28.29389  ",
+                 "ra": "18 32 37.260  ",
+                 "dec": "-21 13 49.86  ",
+                 "mag": "26.3",
+                 "filter": "R ",
+                 "provisional_name": "NI100     ",
+                 "observatory_code": "304"}
+        end_pos = 0
+        args = {}
+        for part in line_order:
+            start_pos = end_pos
+            end_pos = start_pos + len(parts[part])
+            args[part] = ted[start_pos:end_pos]
+        return Observation(provisional_name=args['provisional_name'],
+                           date=args['date'],
+                           ra=args['ra'],
+                           dec=args['dec'],
+                           mag=args['mag'],
+                           band=args['filter'],
+                           observatory_code=args['observatory_code'])
 
     @classmethod
     def from_string(cls, input_line):
         """
         Given an MPC formatted line, returns an MPC Observation object.
+
+        This method attempts four different format.
+
+        If line is less than 80 characters then assumes in 'ted' format,
+
+        If line equal/greater than 80 tries some fixed structure formats
+
+        mpc_format = '0s5s7s1s1s1s17s12s12s9x5s1s6x3s'
+        ossos_format1 = '1s4s7s1s1s1s17s12s12s9x5s1s6x3s'
+        ossos_format2' = '1s0s11s1s1s1s17s12s12s9x5s1s6x3s'
+
+        if those fail then tries Alex Parker's .ast format.
+
         :param mpc_line: a line in the one-line roving observer format
+        :type mpc_line: basestring
         """
+        struct_formats = {'mpc_format': '0s5s7s1s1s1s17s12s12s9x5s1s6x3s',
+                          'ossos_format1': '1s4s7s1s1s1s17s12s12s9x5s1s6x3s',
+                          'ossos_format2': '1s0s11s1s1s1s17s12s12s9x5s1s6x3s'}
+
         mpc_line = input_line.strip('\n')
+        logging.debug("Trying to create MPC record from:\n{}".format(mpc_line))
         if len(mpc_line) > 0 and mpc_line[0] == '#':
             return MPCComment.from_string(mpc_line[1:])
-        mpc_format = '1s11s1s1s1s17s12s12s9x5s1s6x3s'
+
         comment = mpc_line[81:]
         mpc_line = mpc_line[0:80]
         if len(mpc_line) != 80:
-            # this could be a 'ted' formatted line (used by Marc Buie's code).
-            return None
-        obsrec = cls(*struct.unpack(mpc_format, mpc_line))
+            logging.debug("Line is short, trying .ted format")
+            try:
+               return cls.from_ted(mpc_line)
+            except Exception as e:
+               pass
+
+        obsrec = None
+        for format_name in struct_formats:
+            try:
+                logging.debug("Trying to parse with {}".format(format_name))
+                obsrec = cls(*struct.unpack(struct_formats[format_name], mpc_line))
+                break
+            except Exception as ex:
+                logging.debug("Failed: {}".format(ex))
+                obsrec = None
+
+        if obsrec is None:
+            logging.debug("Trying AP's .ast format")
+            # try converting using Alex Parker's .ast format:
+            # 2456477.78468 18:39:07.298 -20:40:17.53 0.2 304
+            _parts = mpc_line.split(' ')
+            args = {"date": Time(float(_parts[0]), scale='utc', format='jd').mpc,
+                    "discovery": False,
+                    "ra": _parts[1].replace(":", " "),
+                    "dec": _parts[2].replace(":", " "),
+                    "plate_uncertainty": _parts[3],
+                    "observatory_code": _parts[4]}
+            return cls(**args)
+
         obsrec.comment = MPCComment.from_string(comment)
         if isinstance(obsrec.comment, OSSOSComment) and obsrec.comment.source_name is None:
             obsrec.comment.source_name = obsrec.provisional_name
@@ -621,12 +626,16 @@ class Observation(object):
         # MOP/OSSOS allows the provisional name to take up the full space allocated to the MinorPlanetNumber AND
         # the provisional name.
 
-        if len(self.provisional_name) > 7:
-            padding = ""
+        if not self.minor_planet_number:
+            if len(self.provisional_name) > 7:
+                mpc_str = "{:1.1s}{:<11.11s}".format(self.null_observation,
+                                                     self.provisional_name)
+            else:
+                mpc_str = "{:1.1s}{:4.4s}{:<7.7s}".format(self.null_observation,
+                                                          " " * 4,
+                                                          self.provisional_name)
         else:
-            padding = " " * 4
-        ## padding = " " * min(4, 11 - len(self.provisional_name))
-        mpc_str = "%-12s" % (str(self.null_observation) + padding + self.provisional_name)
+            mpc_str = "{:5.5s}{:<7.7s}".format(self.minor_planet_number, self.provisional_name)
 
         mpc_str += str(self.discovery)
         mpc_str += '{0:1s}{1:1s}'.format(str(self.note1), str(self.note2))
@@ -634,7 +643,8 @@ class Observation(object):
         mpc_str += '{0:<12s}{1:<12s}'.format(str(self.ra), str(self.dec))
         mpc_str += 9 * " "
         mag_format = '{0:<5.' + str(self._mag_precision) + 'f}{1:1s}'
-        mag_str = (self.mag is None and 6 * " ") or mag_format.format(self.mag, self.band)
+        band = self.band is None and " " or self.band
+        mag_str = (self.mag is None and 6 * " ") or mag_format.format(self.mag, band)
         if len(mag_str) != 6:
             raise MPCFieldFormatError("mag",
                                       "length of mag string should be exactly 6 characters, got->",
@@ -699,6 +709,17 @@ class Observation(object):
         self._provisional_name = provisional_name
 
     @property
+    def minor_planet_number(self):
+        """
+        :return: minor_planet_number for object associated with this observation.
+        """
+        return self._minor_planet_number
+
+    @minor_planet_number.setter
+    def minor_planet_number(self, minor_planet_number):
+        self._minor_planet_number = MinorPlanetNumber(minor_planet_number)
+
+    @property
     def discovery(self):
         """
         Is this a discovery observation?
@@ -739,24 +760,26 @@ class Observation(object):
     @date.setter
     def date(self, date_str):
         self._date_precision = compute_precision(date_str)
+        logging.debug("Setting precision to: {}".format(self._date_precision))
         try:
             self._date = Time(date_str, format='mpc', scale='utc', precision=self._date_precision)
-        except:
+        except Exception as ex:
+            logging.error(str(ex))
             raise MPCFieldFormatError("Observation Date",
                                       "does not match expected format",
                                       date_str)
 
     @property
     def ra(self):
-        return self.coordinate.ra.format(unit=units.hour, decimal=False,
-                                         sep=" ", precision=self._ra_precision, alwayssign=False,
-                                         pad=True)
+        return self.coordinate.ra.to_string(unit=units.hour, decimal=False,
+                                            sep=" ", precision=self._ra_precision, alwayssign=False,
+                                            pad=True)
 
     @property
     def dec(self):
-        return self.coordinate.dec.format(unit=units.degree, decimal=False,
-                                          sep=" ", precision=self._dec_precision, alwayssign=True,
-                                          pad=True)
+        return self.coordinate.dec.to_string(unit=units.degree, decimal=False,
+                                             sep=" ", precision=self._dec_precision, alwayssign=True,
+                                             pad=True)
 
     @property
     def comment(self):
@@ -793,14 +816,13 @@ class Observation(object):
         try:
             ra = float(val1)
             dec = float(val2)
-            self._coordinate = ICRSCoordinates(ra, dec, unit=(units.degree, units.degree))
+            self._coordinate = SkyCoord(ra, dec, unit=(units.degree, units.degree))
         except:
             try:
                 self._ra_precision = compute_precision(val1)
                 self._dec_precision = compute_precision(val2)
-                self._coordinate = ICRSCoordinates(val1, val2, unit=(units.hour, units.degree))
+                self._coordinate = SkyCoord(val1, val2, unit=(units.hour, units.degree))
             except Exception as e:
-                sys.stderr.write(str(e)+"\n")
                 raise MPCFieldFormatError("coord_pair",
                                           "must be [ra_deg, dec_deg] or HH MM SS.S[+-]dd mm ss.ss",
                                           coord_pair)
@@ -858,7 +880,7 @@ class OSSOSComment(object):
     Parses an OSSOS observation's metadata into a format that can be stored in the 
     an Observation.comment and written out in the same MPC line.
 
-    Specification: '1s1x10s1x11s1x2s1x7s1x7s1x4s1x1s1x5s1x4s1x'
+    Specification: '1s1x12s1x11s1x2s1x7s1x7s1x4s1x1s1x5s1x4s1x'
     """
 
     def __init__(self, version, frame, source_name, photometry_note, mpc_note, x, y,
@@ -916,16 +938,18 @@ class OSSOSComment(object):
         if len(values) > 1:
             comment_string = values[1].lstrip(' ')
         # O 1631355p21 O13AE2O     Z  1632.20 1102.70 0.21 3 ----- ---- % Apcor failure.
-        ossos_comment_format = '1s1x10s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
-        try:
-            retval = cls(*struct.unpack(ossos_comment_format, values[0]))
-            retval.comment = values[1]
-            return retval
-        except Exception as e:
-            logging.debug(str(e))
-            logging.debug("OSSOS Fixed Format Failed.")
-            logging.debug(comment)
-            logging.debug("Trying space separated version")
+        ossos_comment_format = '1s1x12s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
+        old_ossos_comment_format = '1s1x10s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
+        for struct_ in [ossos_comment_format, old_ossos_comment_format]:
+            try:
+               retval = cls(*struct.unpack(struct_, values[0]))
+               retval.comment = values[1]
+               return retval
+            except Exception as e:
+               logging.debug(str(e))
+               logging.debug("OSSOS Fixed Format Failed.")
+               logging.debug(comment)
+               logging.debug("Trying space separated version")
 
         values = values[0].split()
         try:
@@ -1092,7 +1116,7 @@ class OSSOSComment(object):
             return "{:1s} {:10s} {}".format(self.version, self.frame, self.comment)
 
         comm = '{:1s}'.format(self.version)
-        comm += self.to_str("{:>10.10s}", self.frame, "-"*10)
+        comm += self.to_str("{:>12.12s}", self.frame, "-"*12)
         comm += self.to_str("{:<11.11s}", self.source_name, "-"*11)
         comm += self.to_str("{:2.2s}", self.photometry_note+self.mpc_note, "--")
         comm += self.to_str("{:>7.2f}", self.x, "-"*7)
@@ -1252,22 +1276,22 @@ class MPCReader(object):
         Read  MPC records from filename:
 
         :param filename: filename of file like object.
-        :rtype : numpy.ndarray
+        :rtype : [Observation]
         """
 
         self.filename = filename
         # can be a file like objects,
         if isinstance(filename, basestring):
-            filehandle = storage.open_vos_or_local(filename, "rb")
+            filehandle = open_vos_or_local(filename, "rb")
         else:
             filehandle = filename
 
-        filestr = filehandle.read()
+        input_mpc_lines = filehandle.read().split('\n')
         filehandle.close()
-        input_mpc_lines = filestr.split('\n')
         mpc_observations = []
         next_comment = None
         for line in input_mpc_lines:
+            line = line.rstrip()
             try:
                 mpc_observation = Observation.from_string(line)
                 if isinstance(mpc_observation, OSSOSComment):
@@ -1280,8 +1304,11 @@ class MPCReader(object):
 
                     if self.replace_provisional is not None:  # then it has an OSSOS designation: set that in preference
                         mpc_observation.provisional_name = self.provisional_name
+                    if len(str(mpc_observation.provisional_name.strip())) == 0 and str(mpc_observation.minor_planet_number) == "":
+                        mpc_observation.provisional_name = filename.split(".")[0]
                     mpc_observations.append(mpc_observation)
-            except:
+            except Exception as e:
+                logging.error(str(e))
                 continue
 
         # No assurance that a .ast file is date-ordered: date-ordered is more expected behaviour
@@ -1400,6 +1427,7 @@ class MPCConverter(object):
                 cls(path + fn).convert()
 
 
+
 class CFEPSComment(OSSOSComment):
     """
     This holds the old-style comments that come for CFEPS style entries.
@@ -1507,7 +1535,6 @@ class TNOdbComment(OSSOSComment):
         comm += str(self)
         return comm
 
-
 class RealOSSOSComment(OSSOSComment):
 
     @classmethod
@@ -1515,7 +1542,6 @@ class RealOSSOSComment(OSSOSComment):
         if comment.strip()[0] != "O":
             comment = "O "+comment
         return super(RealOSSOSComment, cls).from_string(comment)
-
 
 class MPCComment(OSSOSComment):
     """
