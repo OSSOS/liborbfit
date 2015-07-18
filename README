@@ -1,8 +1,6 @@
 This project is to create a set of B&K libraries that can be called from python wrappers. 
 
-Currently we build the library to and provide an example python usage.  
-
-More complete python classes are TBD. 
+Currently we build the library to and provide an example python usage.
 
 Started working on this on 10=APR=2012
 
@@ -14,5 +12,23 @@ Edit the Makefile and change the value of 'prefix' to indicate where you want to
 make 
 make install
 
-Have a look around to find the example script that calls these libraries inside python.
+
+In the python directory there are a couple of module files you might find useful.
+
+PYTHON USAGE:
+
+orbfit_pyephem.py uses the orbfit library you just built and the 'pyephem' module  to run bk_orbfit
+
+orbfit_astropy.py uses the orbfit library you just built and the astropy modeul as well as the mpc.py and util.py files to run bk_orbfit
+
+You can try them out like so:
+
+> cd python
+> python orbfit_pyepehem.py
+> python orbfit_astropy.py
+
+They provide slightly different JD conversions, but the end result is positions that agree at 0.001 arcseconds.
+
+The main advantage in mpc.py is the use of a parser that understands a variety of formats the ephemeris measurements are sometimes reported in.
+
 
