@@ -139,7 +139,7 @@ class Orbfit(object):
         self.dra = predict.contents[2]
         self.ddec = predict.contents[3]
         self.pa = predict.contents[4]
-        self.date = str(time)
+        self.date = jd
 
 
 
