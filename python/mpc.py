@@ -8,8 +8,7 @@ import logging
 from astropy.coordinates import SkyCoord
 from astropy import units
 import numpy
-from .storage import open_vos_or_local
-from .util import Time
+from util import Time
 
 
 DEFAULT_OBSERVERS = ['M. T. Bannister', 'J. J. Kavelaars']
@@ -1282,7 +1281,7 @@ class MPCReader(object):
         self.filename = filename
         # can be a file like objects,
         if isinstance(filename, basestring):
-            filehandle = open_vos_or_local(filename, "rb")
+            filehandle = open(filename, "rb")
         else:
             filehandle = filename
 
@@ -1308,7 +1307,7 @@ class MPCReader(object):
                         mpc_observation.provisional_name = filename.split(".")[0]
                     mpc_observations.append(mpc_observation)
             except Exception as e:
-                logging.error(str(e))
+                logging.debug(str(e))
                 continue
 
         # No assurance that a .ast file is date-ordered: date-ordered is more expected behaviour
