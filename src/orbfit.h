@@ -9,14 +9,14 @@
 #define MAXOBS  4000    
 
 /*Default name of binary DE405 ephemeris data:*/
-#define DEFAULT_EPHEM_FILE "/usr/local/data/binEphem.405"
+#define DEFAULT_EPHEM_FILE "/usr/local/lib/binEphem.405"
 /*Or override the above by looking for filename under
  * this environment variable:
  */
 #define EPHEM_ENVIRON "ORBIT_EPHEMERIS"
 
 /*Name of observatory location file:*/
-#define DEFAULT_OBSERVATORY_FILE "/usr/local/data/observatories.dat"
+#define DEFAULT_OBSERVATORY_FILE "/usr/local/lib/observatories.dat"
 /*Or override the above by looking for filename under
  * this environment variable:
  */

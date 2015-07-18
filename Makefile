@@ -4,6 +4,7 @@ CC=gcc
 INSTALL=install -c -m 644
 CFLAGS=-fPIC -ansi -pedantic -Wall -Wextra -I. -Dlint -Wno-unused-parameter -Wno-unused-variable
 
+
 LIBS=-lm -lc
 
 prefix=/usr/local
@@ -31,7 +32,8 @@ liborbfit: $(OBJ)
 install: all
 	$(INSTALL) liborbfit.so $(libdir)
 	$(INSTALL) $(INCS) $(incdir)
-	$(INSTALL) $(DATA) $(libdir)
+	$(INSTALL) data/observatories.dat $(libdir)
+	uname -m | grep -q 64 && ${INSTALL} data/binEphem.405_64 ${libdir}/binEphem.405 || ${INSTALL} data/binEphem.405_64 ${libdir}/binEphem.405
 
 
 clean:
