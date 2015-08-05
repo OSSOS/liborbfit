@@ -74,7 +74,7 @@ class Orbfit(object):
         self.distance_uncertainty = result.contents[1] * units.AU
 
         # call abg_to_aei to get elliptical elements and their chi^2 uncertainty.
-        self.orbfit.abg_to_aei.restype = ctypes.POINTER(ctypes.c_double * 12)
+        self.orbfit.abg_to_aei.restype = ctypes.POINTER(ctypes.c_double * 13)
         self.orbfit.abg_to_aei.argtypes = [ctypes.c_char_p]
         result = self.orbfit.abg_to_aei(ctypes.c_char_p(_abg_file.name))
 
@@ -90,6 +90,7 @@ class Orbfit(object):
         self._dom = result.contents[10] * units.degree
         self._T = result.contents[5] * units.day
         self._dT = result.contents[11] * units.day
+        self._epoch = Time(result.contents[12] * units.day, scale='utc', format='jd')
         _abg_file.seek(0)
         self.abg = _abg_file.read()
 
@@ -100,6 +101,14 @@ class Orbfit(object):
         :rtype: Quantity
         """
         return self._a
+
+    @property
+    def epoch(self):
+        """
+        :return: the epoch of the orbital elements.
+        :rtype: Quantity
+        """
+        return self._epoch
 
     @property
     def da(self):
@@ -280,14 +289,15 @@ class Orbfit(object):
 
         """
 
-        res = "{:>12s} {:>10s} {:>10s} {:>10s} {:>10s} {:>10s} {:>10s}\n".format(
+        res = "{:>12s} {:>10s} {:>10s} {:>10s} {:>10s} {:>10s} {:>10s} on JD {:15}\n".format(
             self.observations[0].provisional_name.strip(' '),
             "distance",
             "a ",
             "e",
             "Inc.",
             "Node",
-            "peri.")
+            "peri.",
+            self.epoch.iso)
         res += "{:>10s} {:8.2f} {:8.2f} {:8.2f} {:8.2f} {:8.2f} {:8.2f}\n".format("fit",
                                                                                   self.distance,
                                                                                   self.a,

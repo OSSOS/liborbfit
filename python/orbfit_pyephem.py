@@ -102,7 +102,7 @@ class Orbfit(object):
         self.distance = result.contents[0]
         self.distance_uncertainty = result.contents[1]
 
-        self.orbfit.abg_to_aei.restype = ctypes.POINTER(ctypes.c_double * 12)
+        self.orbfit.abg_to_aei.restype = ctypes.POINTER(ctypes.c_double * 13)
         self.orbfit.abg_to_aei.argtypes = [ctypes.c_char_p]
         result = self.orbfit.abg_to_aei(ctypes.c_char_p(self._abg.name))
         self.a = result.contents[0]
@@ -117,18 +117,19 @@ class Orbfit(object):
         self.dom = result.contents[10]
         self.T = result.contents[5]
         self.dT = result.contents[11]
+        self.epoch = result.contents[12]
 
     def __str__(self):
         """
 
         """
-        res = "{:>10s} {:>8s} {:>8s} {:>8s} {:>8s} {:>8s} {:>8s}\n".format(self.name,
+        res = "{:>10s} {:>8s} {:>8s} {:>8s} {:>8s} {:>8s} {:>8s} on JD {:15}\n".format(self.name,
                                                                            "r (AU)",
                                                                            "a (AU)",
                                                                            "e",
                                                                            "Inc.",
                                                                            "Node",
-                                                                           "peri.")
+                                                                           "peri.", self.epoch)
         res += "{:>10s} {:8.2f} {:8.2f} {:8.2f} {:8.2f} {:8.2f} {:8.2f}\n".format("fit",
                                                                                   self.distance,
                                                                                   self.a,

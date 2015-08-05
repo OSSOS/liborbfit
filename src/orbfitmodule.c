@@ -243,6 +243,7 @@ double *abg_to_aei(char *abg_file)
   result[9] = sqrt(covar_aei[4][4])/DTOR;
   result[10] = sqrt(covar_aei[5][5])/DTOR;
   result[11] = sqrt(covar_aei[6][6])/DAY;
+  result[12] = jd0;
 
   free_dmatrix(covar_abg,1,6,1,6);
   free_dmatrix(covar_xyz,1,6,1,6);
