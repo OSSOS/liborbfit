@@ -6,7 +6,7 @@ logging.basicConfig(level=logging.INFO, format="%(filename)s %(lineno)s %(messag
 mpc_filename = sys.argv[1]
 
 import mpc
-import orbfit_astropy as orbfit
+import orbfit_pyephem as orbfit
 
 observations = mpc.MPCReader().read(mpc_filename)
 
