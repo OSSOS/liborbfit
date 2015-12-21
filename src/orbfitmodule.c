@@ -184,7 +184,7 @@ double *abg_to_aei(char *abg_file)
   PBASIS p;
   XVBASIS xv;
   ORBIT orbit;
-  static double result[12];
+  static double result[13];
   double  **covar_abg, **covar_xyz, **derivs, **covar_aei;
 
   int	i,j;
