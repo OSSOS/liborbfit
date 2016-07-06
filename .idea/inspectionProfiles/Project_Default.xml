@@ -3,18 +3,20 @@
     <option name="myName" value="Project Default" />
     <option name="myLocal" value="false" />
     <inspection_tool class="PyBroadExceptionInspection" enabled="false" level="WEAK WARNING" enabled_by_default="false" />
+    <inspection_tool class="PyPep8NamingInspection" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <option name="ignoredBaseClasses">
+        <list>
+          <option value="unittest.TestCase" />
+          <option value="unittest.case.TestCase" />
+          <option value="mp_ephem.bk_orbit.BKOrbit" />
+        </list>
+      </option>
+    </inspection_tool>
     <inspection_tool class="PyUnresolvedReferencesInspection" enabled="true" level="WARNING" enabled_by_default="true">
       <option name="ignoredIdentifiers">
-        <value>
-          <list size="6">
-            <item index="0" class="java.lang.String" itemvalue="numpy.random.rand" />
-            <item index="1" class="java.lang.String" itemvalue="astropy.units.AU" />
-            <item index="2" class="java.lang.String" itemvalue="astropy.units.degree" />
-            <item index="3" class="java.lang.String" itemvalue="astropy.units.day" />
-            <item index="4" class="java.lang.String" itemvalue="astropy.units.arcsec" />
-            <item index="5" class="java.lang.String" itemvalue="astropy.units.hour" />
-          </list>
-        </value>
+        <list>
+          <option value="astropy.units.*" />
+        </list>
       </option>
     </inspection_tool>
   </profile>

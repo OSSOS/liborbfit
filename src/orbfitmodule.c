@@ -106,7 +106,8 @@ double *predict(char *abg_file, double jdate, int obscode)
   double ra,dec, **coveq;
   double yr,mo,day,hr,mn,ss;
   double xx,yy,xy,bovasqrd,det;
-  static double result[5];
+  double distance;
+  static double result[6];
   int i,nfields;
   int iarg=1;
 
@@ -121,6 +122,7 @@ double *predict(char *abg_file, double jdate, int obscode)
   result[2] = -1.0;
   result[3] = -1.0;
   result[4] = -1.0;
+  result[5] = -1.0;
  
   if (read_abg(abg_file,&p,covar) ) { 
     fprintf(stderr, "Error input alpha/beta/gamma file %s\n",abg_file);
@@ -134,7 +136,7 @@ double *predict(char *abg_file, double jdate, int obscode)
   futobs.obstime=(jdate-jd0)*DAY;
   futobs.xe = -999.;		/* Force evaluation of earth3d */
 
-  predict_posn(&p,covar,&futobs,sigxy);
+  distance = predict_posn(&p,covar,&futobs,sigxy);
 
 
   
@@ -173,6 +175,7 @@ double *predict(char *abg_file, double jdate, int obscode)
    result[2] = a/ARCSEC;
    result[3] = b/ARCSEC;
    result[4] = PA;
+   result[5] = distance;
 
   return result;
 

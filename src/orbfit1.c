@@ -33,7 +33,7 @@ set_mpc_dtheta(double d) {
 }
 
 /* Project KBO position onto tangent plane at a given time */
-void
+double
 kbo2d(PBASIS *pin, 
       OBSERVATION *obs,
       double *x, double dx[],
@@ -84,7 +84,7 @@ kbo2d(PBASIS *pin,
   if (dx!=NULL) dx[5] += vk[0]*invz*invz/SPEED_OF_LIGHT;
   if (dx!=NULL) dy[5] += vk[1]*invz*invz/SPEED_OF_LIGHT;
  
-  return;
+  return distance;
 }
  
 /* Linearized version of the 2d projection of orbital position.  Only
@@ -467,20 +467,20 @@ prelim_fit(OBSERVATION obsarray[],
 /* Routine to predict position and uncertainty at any time, given
  * a PBASIS fit and a sigma matrix.
  */
-void
+double
 predict_posn(PBASIS *pin,
              double **covar,
              OBSERVATION *obs,
              double **sigxy)    /*this holds xy error matrix*/
 {
   int   i,j,t;
-  double *dx,*dy;
+  double *dx,*dy, distance;
 
   dx=dvector(1,6);
   dy=dvector(1,6);
 
   /*using input time & obscode, put xy position into OBSERVATION struct*/
-  kbo2d(pin,obs,
+  distance = kbo2d(pin,obs,
 	&(obs->thetax),dx,&(obs->thetay),dy);
 
   /* project the covariance matrix */
@@ -499,7 +499,7 @@ predict_posn(PBASIS *pin,
 
   free_dvector(dx,1,6);
   free_dvector(dy,1,6);
-  return;
+  return distance;
 }
 
 /* Invert a double matrix, 1-indexed of size dim
@@ -975,6 +975,7 @@ fake_observation(PBASIS *p,
 {
   static long idum=-1;
   float gasdev(long *idum);
+  float distance;
 
   /* seed the random number generator*/
   if (idum<0) {
@@ -983,7 +984,7 @@ fake_observation(PBASIS *p,
     idum = -tp.tv_usec;
   }
 
-  kbo2d(p,obs,&(obs->thetax),NULL,&(obs->thetay),NULL);
+  distance = kbo2d(p,obs,&(obs->thetax),NULL,&(obs->thetay),NULL);
 
   /* Add measurement noise to the positions */
   obs->thetax += obs->dthetax*gasdev(&idum);

@@ -177,7 +177,7 @@ int
 is_visible(OBSERVATION *o);
 
 /* tangent-plane angular position of KBO and derivs */
-extern  void
+extern  double
 kbo2d(PBASIS *pin, 
       OBSERVATION *obs,
       double *x, double dx[],
@@ -239,7 +239,7 @@ fit_observations(OBSERVATION obsarray[],
 /* Routine to predict position and uncertainty at any time, given
  * a PBASIS fit and a sigma matrix.
  */
-void
+double
 predict_posn(PBASIS *pin,
              double **covar,
              OBSERVATION *obs,

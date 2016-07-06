@@ -1,34 +1,16 @@
-This project is to create a set of B&K libraries that can be called from python wrappers. 
+This module contains functions and classes for reading in astrometric measurements given in a variety of formats,
+ including the Minor Planet Center single line format, as well as python accessible version of the B&K orbit fitting
+ libraries.
 
-Currently we build the library to and provide an example python usage.
 
 Started working on this on 10=APR=2012
 
 INSTALL
 
-Edit the Makefile and change the value of 'prefix' to indicate where you want to install your library.
-
-
-make 
-make install
-
-
-In the python directory there are a couple of module files you might find useful.
+python setup.py install
 
 PYTHON USAGE:
 
-orbfit_pyephem.py uses the orbfit library you just built and the 'pyephem' module  to run bk_orbfit
-
-orbfit_astropy.py uses the orbfit library you just built and the astropy modeul as well as the mpc.py and util.py files to run bk_orbfit
-
-You can try them out like so:
-
-> cd python
-> python orbfit_pyepehem.py
-> python orbfit_astropy.py
-
-They provide slightly different JD conversions, but the end result is positions that agree at 0.001 arcseconds.
-
-The main advantage in mpc.py is the use of a parser that understands a variety of formats the ephemeris measurements are sometimes reported in.
+look in the example.py file distrbuted with the source.
 
 

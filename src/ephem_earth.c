@@ -359,7 +359,7 @@ void Interpolate_Position( double Time , int Target , double Position[3] )
   else if ( G > 1 )
      {
        T_sub = T_span / ((double) G);          /* Compute subgranule interval */
-       
+       T_seg = T_beg + T_sub ;                 /* Set T_seg to the smallest value that is reasonable */
        for ( j=G ; j>0 ; j-- ) 
            {
              T_break = T_beg + ((double) j-1) * T_sub;
@@ -495,7 +495,7 @@ void Interpolate_State(double Time,
   else if ( G > 1 )
      {
        T_sub = T_span / ((double) G);          /* Compute subgranule interval */
-       
+       T_seg = T_beg + T_sub ;                 /* Set T_seg to the smallest value that is reasonable */
        for ( j=G ; j>0 ; j-- ) 
            {
              T_break = T_beg + ((double) j-1) * T_sub;

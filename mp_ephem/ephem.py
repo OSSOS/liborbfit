@@ -1,17 +1,23 @@
-__author__ = 'jjk, mtb55'
-
 import os
 import re
 import struct
-import sys
 import logging
 from astropy.coordinates import SkyCoord
 from astropy import units
 import numpy
-from util import Time
+from astropy.time import Time
 
+__author__ = 'jjk, mtb55'
 
-DEFAULT_OBSERVERS = ['M. T. Bannister', 'J. J. Kavelaars']
+DEFAULT_OBSERVERS = ['M. T. Bannister',
+                     'J. J. Kavelaars',
+                     'B. J. Gladman',
+                     'J.-M. Petit',
+                     'T. Burdullis'
+                     ]
+DEFAULT_MEASURERS = ['S. D. J. Gwyn',
+                     'Y.-T. Chen.'
+                     ]
 DEFAULT_TELESCOPE = "CFHT 3.6m + CCD"
 DEFAULT_ASTROMETRIC_NETWORK = "UCAC4"
 
@@ -78,7 +84,6 @@ MPCNOTES = {"Note1": {" ": " ",
 
 
 class MinorPlanetNumber(object):
-
     PACKED_DESIGNATION = " ABCDEFGHJKLMNOPQRSTUVWXYZ"
 
     def __init__(self, minor_planet_number):
@@ -94,7 +99,6 @@ class MinorPlanetNumber(object):
                 raise MPCFieldFormatError("minor_planet_number",
                                           "1 char or digit and 4 digits",
                                           minor_planet_number)
-
 
     def __str__(self):
         if self._minor_planet_number is None:
@@ -121,7 +125,6 @@ class MinorPlanetNumber(object):
 
 
 class NullObservation(object):
-
     NULL_OBSERVATION_CHARACTERS = ["!", "-", "#"]
 
     def __init__(self, null_observation=None, null_observation_character=None):
@@ -129,9 +132,8 @@ class NullObservation(object):
         A boolean object that keeps track of True/False status via a set of magic characters.
         """
         if null_observation is not None and \
-                isinstance(null_observation, basestring) and \
-                len(null_observation.strip(' ')) > 0 and \
-                null_observation not in NullObservation.NULL_OBSERVATION_CHARACTERS:
+                isinstance(null_observation, basestring) and len(str(null_observation).strip(' ')) > 0 and \
+                        null_observation not in NullObservation.NULL_OBSERVATION_CHARACTERS:
             raise MPCFieldFormatError("null_observation",
                                       "one of " + str(NullObservation.NULL_OBSERVATION_CHARACTERS),
                                       null_observation)
@@ -168,8 +170,7 @@ class TNOdbFlags(object):
     """
 
     def __init__(self, flags):
-
-        if not re.match("[10]{12}", flags):
+        if not re.match("\d{12}", flags):
             raise ValueError("illegal flag string: {}".format(flags))
         self.__flags = flags
 
@@ -195,7 +196,6 @@ class TNOdbFlags(object):
         :return: bool
         """
         return self.__flags[1] == 1
-
 
 
 class MPCFieldFormatError(MPCFormatError):
@@ -230,12 +230,12 @@ def format_ra_dec(ra_deg, dec_deg):
 
     # decimal=False results in using sexagesimal form
     formatted_ra = coords.ra.to_string(unit=units.hour, decimal=False,
-                                    sep=" ", precision=3, alwayssign=False,
-                                    pad=True)
+                                       sep=" ", precision=3, alwayssign=False,
+                                       pad=True)
 
     formatted_dec = coords.dec.to_string(unit=units.degree, decimal=False,
-                                      sep=" ", precision=2, alwayssign=True,
-                                      pad=True)
+                                         sep=" ", precision=2, alwayssign=True,
+                                         pad=True)
 
     return formatted_ra, formatted_dec
 
@@ -347,9 +347,9 @@ class Discovery(object):
     def is_discovery(self, is_discovery):
         if is_discovery not in ['*', '&', ' ', '', True, False, None]:
             raise MPCFieldFormatError("discovery",
-                                      "must be one of '',' ','&', '*',True, False. Was: ",
+                                      "must be one of '',' ','&', '*',True, False. ",
                                       is_discovery)
-        self._is_discovery = (is_discovery in ['*', '&', True] and True) or False
+        self._is_discovery = is_discovery in ['*', '&', True] and True or False
 
     @is_initial_discovery.setter
     def is_initial_discovery(self, is_discovery):
@@ -442,7 +442,6 @@ class Observation(object):
         :param plate_uncertainty:
         :param null_observation:
 
-        :type comment MPCComment
         """
         self._null_observation = False
         self._minor_planet_number = None
@@ -556,8 +555,8 @@ class Observation(object):
 
         if those fail then tries Alex Parker's .ast format.
 
-        :param mpc_line: a line in the one-line roving observer format
-        :type mpc_line: basestring
+        :param input_line: a line in the one-line roving observer format
+        :type input_line: str
         """
         struct_formats = {'mpc_format': '0s5s7s1s1s1s17s12s12s9x5s1s6x3s',
                           'ossos_format1': '1s4s7s1s1s1s17s12s12s9x5s1s6x3s',
@@ -571,11 +570,13 @@ class Observation(object):
         comment = mpc_line[81:]
         mpc_line = mpc_line[0:80]
         if len(mpc_line) != 80:
-            logging.debug("Line is short, trying .ted format")
+            logging.error("{}".format(mpc_line))
+            logging.error("mpc line is only {} chars long, trying .ted format".format(len(mpc_line)))
             try:
-               return cls.from_ted(mpc_line)
-            except Exception as e:
-               pass
+                return cls.from_ted(mpc_line)
+            except Exception as ex:
+                logging.debug(type(ex))
+                logging.debug(str(ex))
 
         obsrec = None
         for format_name in struct_formats:
@@ -591,14 +592,21 @@ class Observation(object):
             logging.debug("Trying AP's .ast format")
             # try converting using Alex Parker's .ast format:
             # 2456477.78468 18:39:07.298 -20:40:17.53 0.2 304
-            _parts = mpc_line.split(' ')
-            args = {"date": Time(float(_parts[0]), scale='utc', format='jd').mpc,
-                    "discovery": False,
-                    "ra": _parts[1].replace(":", " "),
-                    "dec": _parts[2].replace(":", " "),
-                    "plate_uncertainty": _parts[3],
-                    "observatory_code": _parts[4]}
-            return cls(**args)
+            try:
+                _parts = mpc_line.split(' ')
+                args = {"date": Time(float(_parts[0]), scale='utc', format='jd').mpc,
+                        "discovery": False,
+                        "ra": _parts[1].replace(":", " "),
+                        "dec": _parts[2].replace(":", " "),
+                        "plate_uncertainty": _parts[3],
+                        "observatory_code": _parts[4]}
+                obsrec = cls(**args)
+            except:
+                obsrec = None
+
+        if not obsrec:
+            logging.error("Failed to parse line: {}".format(mpc_line))
+            return obsrec
 
         obsrec.comment = MPCComment.from_string(comment)
         if isinstance(obsrec.comment, OSSOSComment) and obsrec.comment.source_name is None:
@@ -662,7 +670,7 @@ class Observation(object):
         if not isinstance(self.comment, OSSOSComment):
             logging.warn("Non OSSOS comment:{}".format(self.comment))
 
-        comment_line = "#"+str(self.comment).rstrip('\n')
+        comment_line = "#" + str(self.comment).rstrip('\n')
 
         if self.mag == -1:  # write no mag and no filter for where photometry couldn't be measured
             self.mag = None
@@ -782,6 +790,11 @@ class Observation(object):
 
     @property
     def comment(self):
+        """
+
+        :return: the comment
+        :rtype: OSSOSComment
+        """
         return self._comment
 
     @comment.setter
@@ -819,9 +832,13 @@ class Observation(object):
         except:
             try:
                 self._ra_precision = compute_precision(val1)
+                self._ra_precision = self._ra_precision < 3 and self._ra_precision or 3
                 self._dec_precision = compute_precision(val2)
+                self._dec_precision = self._dec_precision < 2 and self._dec_precision or 2
                 self._coordinate = SkyCoord(val1, val2, unit=(units.hour, units.degree))
-            except Exception as e:
+            except Exception as ex:
+                logging.debug(type(ex))
+                logging.debug(str(ex))
                 raise MPCFieldFormatError("coord_pair",
                                           "must be [ra_deg, dec_deg] or HH MM SS.S[+-]dd mm ss.ss",
                                           coord_pair)
@@ -849,7 +866,6 @@ class Observation(object):
             self._mag_err = None
         else:
             self._mag_err = mag_err
-
 
     @property
     def band(self):
@@ -890,6 +906,7 @@ class OSSOSComment(object):
                  comment=None):
 
         self.version = version
+        self._frame = None
         self.frame = frame
         self.source_name = source_name
         self._photometry_note = None
@@ -928,6 +945,7 @@ class OSSOSComment(object):
         """
         Build an MPC Comment from a string.
         """
+        logging.debug("Attempting to build an OSSOS comment from {}".format(comment))
         if comment is None or len(comment) == 0:
             return str("")
         if comment[0] == "#":
@@ -939,35 +957,37 @@ class OSSOSComment(object):
         # O 1631355p21 O13AE2O     Z  1632.20 1102.70 0.21 3 ----- ---- % Apcor failure.
         ossos_comment_format = '1s1x12s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
         old_ossos_comment_format = '1s1x10s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
-        for struct_ in [ossos_comment_format, old_ossos_comment_format]:
+        bad_ossos_comment_format = '1s3x10s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
+        for struct_ in [ossos_comment_format, old_ossos_comment_format, bad_ossos_comment_format]:
             try:
-               retval = cls(*struct.unpack(struct_, values[0]))
-               retval.comment = values[1]
-               return retval
+                logging.debug("Parsing using structure: {}".format(struct_))
+                retval = cls(*struct.unpack(struct_, values[0]))
+                retval.comment = values[1]
+                return retval
             except Exception as e:
-               logging.debug(str(e))
-               logging.debug("OSSOS Fixed Format Failed.")
-               logging.debug(comment)
-               logging.debug("Trying space separated version")
+                logging.debug(str(e))
+                logging.debug("OSSOS Fixed Format Failed.")
 
+        logging.debug("Trying space separated version")
         values = values[0].split()
         try:
-            if values[0] != 'O' or len(values) < 5:
+            if values[0] != 'O' or len(values) < 6:
                 # this is NOT and OSSOS style comment string
                 raise ValueError("Can't parse non-OSSOS style comment: {}".format(comment))
             # first build a comment based on the required fields.
             retval = cls(version="O",
-                         frame=values[1],
-                         source_name=values[2],
-                         photometry_note=values[3][0],
-                         mpc_note=values[3][1:],
-                         x=values[4],
-                         y=values[5],
-                         comment=comment_string)
+                         frame=values[1].strip(),
+                         source_name=values[2].strip(),
+                         photometry_note=values[3][0].strip(),
+                         mpc_note=values[3][1:].strip(),
+                         x=values[4].strip(),
+                         y=values[5].strip(),
+                         comment=comment_string.strip())
         except Exception as e:
+            logging.error(values)
+            logging.error(comment)
             logging.error(str(e))
             raise e
-
 
         retval.version = values[0]
         logging.debug("length of values: {}".format(len(values)))
@@ -991,6 +1011,16 @@ class OSSOSComment(object):
         logging.debug("DONE.")
         return retval
 
+    @property
+    def frame(self):
+        return self._frame
+
+    @frame.setter
+    def frame(self, frame):
+        if frame is not None:
+            self._frame = "{}".format(frame).strip()
+        else:
+            self._frame = frame
 
     @property
     def mag(self):
@@ -1018,7 +1048,7 @@ class OSSOSComment(object):
             if not 0 < self._mag_uncertainty < 1.0:
                 raise ValueError("mag uncertainty must be in range 0 to 1")
         except Exception as e:
-            logging.debug("Failed trying to convert mag_uncertainty ({}) to float. Using default.".format(mag_uncertainty))
+            logging.debug("Failed trying to convert merr ({}) to float. Using default.".format(mag_uncertainty))
             logging.debug(str(e))
             if str(self.mag).isdigit():
                 self.photometry_note = "L"
@@ -1094,13 +1124,14 @@ class OSSOSComment(object):
         else:
             self._comment = ''
 
-    def to_str(self, frmt, value, default="", sep=" "):
+    @staticmethod
+    def to_str(frmt, value, default="", sep=" "):
         try:
             if value is None:
                 raise ValueError("Don't print None.")
-            return sep+frmt.format(value)
+            return sep + frmt.format(value)
         except:
-            return sep+default
+            return sep + default
 
     def __str__(self):
         """
@@ -1115,15 +1146,15 @@ class OSSOSComment(object):
             return "{:1s} {:10s} {}".format(self.version, self.frame, self.comment)
 
         comm = '{:1s}'.format(self.version)
-        comm += self.to_str("{:>12.12s}", self.frame, "-"*12)
-        comm += self.to_str("{:<11.11s}", self.source_name, "-"*11)
-        comm += self.to_str("{:2.2s}", self.photometry_note+self.mpc_note, "--")
-        comm += self.to_str("{:>7.2f}", self.x, "-"*7)
-        comm += self.to_str("{:>7.2f}", self.y, "-"*7)
-        comm += self.to_str('{:4.2f}', self.plate_uncertainty, "-"*4)
+        comm += self.to_str("{:>12.12s}", self.frame, "-" * 12)
+        comm += self.to_str("{:<11.11s}", self.source_name, "-" * 11)
+        comm += self.to_str("{:2.2s}", self.photometry_note + self.mpc_note, "--")
+        comm += self.to_str("{:>7.2f}", self.x, "-" * 7)
+        comm += self.to_str("{:>7.2f}", self.y, "-" * 7)
+        comm += self.to_str('{:4.2f}', self.plate_uncertainty, "-" * 4)
         comm += self.to_str('{:1d}', self.astrometric_level, "-")
-        comm += self.to_str('{:5.2f}', self.mag, "-"*5)
-        comm += self.to_str('{:4.2f}', self.mag_uncertainty, "-"*4)
+        comm += self.to_str('{:5.2f}', self.mag, "-" * 5)
+        comm += self.to_str('{:4.2f}', self.mag_uncertainty, "-" * 4)
         comm += ' % {}'.format(self.comment)
 
         return comm
@@ -1184,7 +1215,18 @@ class MPCWriter(object):
         :param mpc_observation:
         """
         assert isinstance(mpc_observation, Observation)
-        key = mpc_observation.date.mjd
+        try:
+            key = mpc_observation.comment.frame.strip()
+        except:
+            key = mpc_observation.date.mjd
+
+        try:
+            # keep any 'discovery' flags that are set on observation if already in buffer.
+            mpc_observation.discovery = self.buffer[key].discovery.is_discovery
+        except Exception as ex:
+            logging.debug(type(ex))
+            logging.debug(str(ex))
+            pass
         self.buffer[key] = mpc_observation
 
         if self.auto_flush:
@@ -1197,7 +1239,7 @@ class MPCWriter(object):
         self.filehandle.flush()
 
     def _flush_observation(self, obs):
-        isinstance(obs, Observation)
+        assert isinstance(obs, Observation)
         if (self.auto_discovery and
                 not obs.null_observation and
                 not self._discovery_written):
@@ -1226,8 +1268,12 @@ class MPCWriter(object):
         return sorted_obs
 
 
-def make_tnodb_header(observations, observatory_code=None, observers=DEFAULT_OBSERVERS,
-                      telescope=DEFAULT_TELESCOPE, astrometric_network=DEFAULT_ASTROMETRIC_NETWORK):
+def make_tnodb_header(observations,
+                      observatory_code=None,
+                      observers=DEFAULT_OBSERVERS,
+                      measurers=DEFAULT_MEASURERS,
+                      telescope=DEFAULT_TELESCOPE,
+                      astrometric_network=DEFAULT_ASTROMETRIC_NETWORK):
     """
     Write a header appropriate for a tnodb style of file.
     """
@@ -1246,7 +1292,14 @@ def make_tnodb_header(observations, observatory_code=None, observers=DEFAULT_OBS
         sep = ", "
     if len(observers) > 1:
         header += " and {}".format(observers[-1])
-
+    header += "\n"
+    header += "MEA "
+    sep = ""
+    for measurer in measurers[:-1]:
+        header += "{}{}".format(sep, measurer)
+        sep = ", "
+    if len(measurers) > 1:
+        header += " and {}".format(measurers[-1])
     header += "\n"
     header += "TEL {}\n".format(telescope)
     header += "NET {}\n".format(astrometric_network)
@@ -1256,7 +1309,7 @@ def make_tnodb_header(observations, observatory_code=None, observers=DEFAULT_OBS
     return header
 
 
-class MPCReader(object):
+class EphemerisReader(object):
     """
     A class to read in MPC files.
 
@@ -1280,35 +1333,49 @@ class MPCReader(object):
 
         self.filename = filename
         # can be a file like objects,
-        if isinstance(filename, basestring):
-            filehandle = open(filename, "rb")
-        else:
-            filehandle = filename
 
-        input_mpc_lines = filehandle.read().split('\n')
-        filehandle.close()
+        input_mpc_lines = None
+        while True:
+            try:
+                if isinstance(filename, basestring):
+                    filehandle = open(filename, "rb")
+                else:
+                    filehandle = filename
+
+                input_mpc_lines = filehandle.read().split('\n')
+                filehandle.close()
+                break
+            except IOError as ioe:
+                if ioe.errno == 16:
+                    # Resource busy, so try again in a second.
+                    import time
+                    time.sleep(1)
+                else:
+                    raise ioe
+
         mpc_observations = []
         next_comment = None
+        if input_mpc_lines is None:
+            logging.warning("Failed to read any lines from file: {}".format(self.filename))
+            return numpy.array([])
+
         for line in input_mpc_lines:
             line = line.rstrip()
-            try:
-                mpc_observation = Observation.from_string(line)
-                if isinstance(mpc_observation, OSSOSComment):
-                    next_comment = mpc_observation
-                    continue
-                if isinstance(mpc_observation, Observation):
-                    if next_comment is not None:
-                        mpc_observation.comment = next_comment
-                        next_comment = None
-
-                    if self.replace_provisional is not None:  # then it has an OSSOS designation: set that in preference
-                        mpc_observation.provisional_name = self.provisional_name
-                    if len(str(mpc_observation.provisional_name.strip())) == 0 and str(mpc_observation.minor_planet_number) == "":
-                        mpc_observation.provisional_name = filename.split(".")[0]
-                    mpc_observations.append(mpc_observation)
-            except Exception as e:
-                logging.debug(str(e))
+            mpc_observation = Observation.from_string(line)
+            if isinstance(mpc_observation, OSSOSComment):
+                next_comment = mpc_observation
                 continue
+            if isinstance(mpc_observation, Observation):
+                if next_comment is not None:
+                    mpc_observation.comment = next_comment
+                    next_comment = None
+
+                if self.replace_provisional is not None:  # then it has an OSSOS designation: set that in preference
+                    mpc_observation.provisional_name = self.provisional_name
+                if len(str(mpc_observation.provisional_name.strip())) == 0 and \
+                                str(mpc_observation.minor_planet_number) == "":
+                    mpc_observation.provisional_name = filename.split(".")[0]
+                mpc_observations.append(mpc_observation)
 
         # No assurance that a .ast file is date-ordered: date-ordered is more expected behaviour
         mpc_observations.sort(key=lambda x: x.date)
@@ -1426,11 +1493,11 @@ class MPCConverter(object):
                 cls(path + fn).convert()
 
 
-
 class CFEPSComment(OSSOSComment):
     """
     This holds the old-style comments that come for CFEPS style entries.
     """
+
     def __init__(self, frame, comment):
 
         if "measured inside confirm @" in comment:
@@ -1465,6 +1532,7 @@ class TNOdbComment(OSSOSComment):
     A TNOdb style comment consists of three space seperated fields that are used by the tnodb followed by a
     comment string that is either in the CFEPS or OSSOS format.
     """
+
     def __init__(self, index, date, flags, **kwargs):
 
         super(TNOdbComment, self).__init__(**kwargs)
@@ -1483,7 +1551,7 @@ class TNOdbComment(OSSOSComment):
         date = line[15:23].strip()
         flags = line[24:34].strip()
         comment = line[56:].strip()
-
+        logging.debug("Got TNOdb parts: date: {} flags: {} comment: {}".format(date, flags, comment))
         comment_object = None
         # try build a comment object based on the TNOdb comment string
         if len(comment) > 0:
@@ -1530,17 +1598,18 @@ class TNOdbComment(OSSOSComment):
     def to_string(self):
         comm = "{} {} {}".format(self.index, self.date, self.flags)
         # add 22 spaces that are currently padding in TNOdb style records.
-        comm += " "*22
+        comm += " " * 22
         comm += str(self)
         return comm
 
-class RealOSSOSComment(OSSOSComment):
 
+class RealOSSOSComment(OSSOSComment):
     @classmethod
     def from_string(cls, comment):
         if comment.strip()[0] != "O":
-            comment = "O "+comment
+            comment = "O " + comment
         return super(RealOSSOSComment, cls).from_string(comment)
+
 
 class MPCComment(OSSOSComment):
     """
@@ -1564,4 +1633,3 @@ class MPCComment(OSSOSComment):
                 continue
             break
         return comment
-

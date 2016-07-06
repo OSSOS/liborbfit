@@ -28,6 +28,7 @@ void mrqcof_orbit(OBSERVATION obsarray[],
 {
 	int i,j,k,l,m,mfit=0;
 	double xmod,ymod,wtx,wty,sig2x,sig2y,dx,dy,*dyda,*dxda;
+	double distance;
 	double fb1;
 	PBASIS	params;
 	OBSERVATION *oo;
@@ -51,7 +52,7 @@ void mrqcof_orbit(OBSERVATION obsarray[],
 
 	for (i=1;i<=ndata;i++) {
 	        oo = &obsarray[i-1];
-		kbo2d(&params,oo,&xmod,dxda,&ymod,dyda);
+		distance = kbo2d(&params,oo,&xmod,dxda,&ymod,dyda);
 		sig2x=1.0/(oo->dthetax*oo->dthetax);
 		sig2y=1.0/(oo->dthetay*oo->dthetay);
 		dx=oo->thetax-xmod;

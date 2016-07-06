@@ -1,5 +1,3 @@
-__author__ = 'jjk'
-
 import ctypes
 import datetime
 import logging
@@ -7,24 +5,22 @@ import math
 import numpy
 from StringIO import StringIO
 import tempfile
-
+import os
 from astropy.coordinates import SkyCoord
 from astropy import units
 from astropy.units.quantity import Quantity
+from astropy.time import Time
 
-import mpc
-from mpc import Time
-
-LIBORBFIT = "/usr/local/lib/liborbfit.so"
+__author__ = 'jjk'
 
 
-class OrbfitError(Exception):
+class BKOrbitError(Exception):
     def __init__(self):
-        super(OrbfitError, self).__init__(
+        super(BKOrbitError, self).__init__(
             "Insufficient observations for an orbit.")
 
 
-class Orbfit(object):
+class BKOrbit(object):
     """
     This class provides orbital information derived by calling 'fit_radec'.
     """
@@ -37,12 +33,26 @@ class Orbfit(object):
         Requires at least 3 mpc.Observations in the list.
         :rtype : Orbfit
         """
+        __PATH__ = os.path.dirname(__file__)
+        __ORBFIT_LIB__ = os.path.join(__PATH__, "orbit.so")
+        is_64bits = ctypes.sizeof(ctypes.c_voidp) == 8
+
+        bin_ephem = is_64bits and 'binEphem.405_64' or 'binEphem.405_32'
+
+        os.environ['ORBIT_EPHEMERIS'] = os.getenv('ORBIT_EPHEMERIS',
+                                                  os.path.join(__PATH__, 'data', bin_ephem))
+        os.environ['ORBIT_OBSERVATORIES'] = os.getenv('ORBIT_OBSERVATORIES',
+                                                      os.path.join(__PATH__,
+                                                                   'data',
+                                                                   'observatories.dat'))
+        liborbfit = os.path.join(__ORBFIT_LIB__)
+        self.orbfit = ctypes.CDLL(liborbfit)
+
         assert isinstance(observations, tuple) or isinstance(observations, list) or isinstance(observations,
                                                                                                numpy.ndarray)
 
         if len(observations) < 3:
-            raise OrbfitError()
-        self.orbfit = ctypes.CDLL(LIBORBFIT)
+            raise BKOrbitError()
         self.observations = observations
         self._a = self._e = self._inc = self._Node = self._om = self._T = None
         self._da = self._de = self._dinc = self._dNode = self._dom = self._dT = None
@@ -58,9 +68,11 @@ class Orbfit(object):
         self.orbfit.fitradec.restype = ctypes.POINTER(ctypes.c_double * 2)
         self.orbfit.fitradec.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
         for observation in self.observations:
-            assert isinstance(observation, mpc.Observation)
-            if observation.null_observation:
-                continue
+            try:
+                if observation.null_observation:
+                    continue
+            except:
+                pass
             obs = observation
             self.name = observation.provisional_name
             ra = obs.ra.replace(" ", ":")
@@ -70,8 +82,8 @@ class Orbfit(object):
         _mpc_file.seek(0)
         result = self.orbfit.fitradec(ctypes.c_char_p(_mpc_file.name),
                                       ctypes.c_char_p(_abg_file.name))
-        self.distance = result.contents[0] * units.AU
-        self.distance_uncertainty = result.contents[1] * units.AU
+        self._distance = result.contents[0] * units.AU
+        self._distance_uncertainty = result.contents[1] * units.AU
 
         # call abg_to_aei to get elliptical elements and their chi^2 uncertainty.
         self.orbfit.abg_to_aei.restype = ctypes.POINTER(ctypes.c_double * 13)
@@ -201,15 +213,16 @@ class Orbfit(object):
         return self._dT
 
     @property
-    def residuals(self):
+    def residuals(self, overall=False):
         """
         Builds a summary of the residuals of a fit.  This is useful for visually examining the
         goodness of fit for a small number of observations and the impact of adding a few tentative observations.
+        :param overall: should we return the string with the residuals or a list containing the overall residuals?
         :return: A string representation of the residuals between the best fit orbit and  astrometric measurements.
         :rtype: str
         """
-        # # compute the residuals (from the given observations)
         _residuals = ""
+        overall_resids = []
         for observation in self.observations:
             self.predict(observation.date)
             coord1 = SkyCoord(self.coordinate.ra, self.coordinate.dec)
@@ -219,10 +232,14 @@ class Orbfit(object):
             coord2 = SkyCoord(self.coordinate.ra, observation.coordinate.dec)
             observation.dec_residual = float(coord1.separation(coord2).arcsec)
             observation.dec_residual = (coord1.dec.degree - coord2.dec.degree) * 3600.0
+            overall_resids.append(math.sqrt(observation.ra_residual ** 2 + observation.dec_residual ** 2))
             _residuals += "{:1s}{:12s} {:+05.2f} {:+05.2f} # {}\n".format(
                 observation.null_observation, observation.date, observation.ra_residual, observation.dec_residual,
                 observation)
-        return _residuals
+        if overall:
+            return overall_resids  # values in arcsec
+        else:
+            return _residuals
 
     @property
     def coordinate(self):
@@ -284,12 +301,28 @@ class Orbfit(object):
             dates.append(observation.date.jd)
         return (max(dates) - min(dates)) * units.day
 
+    @property
+    def distance(self):
+        """
+        Estimate of the current geocentric distance to the source.
+        :return:
+        """
+        return self._distance
+
+    @property
+    def distance_uncertainty(self):
+        """
+        Estimate of the uncertainty in the geocentric distance estimate.
+        :return:
+        """
+        return self._distance_uncertainty
+
     def __str__(self):
         """
 
         """
 
-        res = "{:>12s} {:>10s} {:>10s} {:>10s} {:>10s} {:>10s} {:>10s} on JD {:15}\n".format(
+        res = "{:>12s} {:>10s} {:>10s} {:>7s} {:>10s} {:>13s} {:>10s} on JD {:15}\n".format(
             self.observations[0].provisional_name.strip(' '),
             "distance",
             "a ",
@@ -320,40 +353,42 @@ class Orbfit(object):
 
         return res
 
-    def predict(self, date, obs_code=568, abg_file=None):
+    def predict(self, date, obs_code=568, abg_file=None, minimum_delta=None):
         """
         use the bk predict method to compute the location of the source on the given date.
         @param date: the julian date of interest or an astropy.core.time.Time object.
         @param obs_code: the Minor Planet Center observatory location code (Mauna Kea: 568 is the default)
 
         this methods sets the values of coordinate, dra (arcseconds), ddec (arcseconds), pa, (degrees) and date (str)
+        :param abg_file: name of the file containing the BK orbit ABG data.
+        :param minimum_delta: the smallest time offset between computing positions, otherwise use previous position.
+
         """
+
+        if minimum_delta is None:
+            minimum_delta = 0.00001 * units.day
 
         if not isinstance(date, Time):
             if isinstance(date, float):
                 try:
                     date = Time(date, format='jd', scale='utc', precision=6)
                 except:
-                    date = None  # FIXME: this might blow up, not sure
-            else:
-                try:
-                    date = Time(date, format='jd', scale='utc', precision=6)
-                except ValueError:
-                    try:
-                        date = Time(date, format='mpc', scale='utc', precision=6)
-                    except ValueError:
-                        date = Time(date, scale='utc', precision=6)  # see if it can guess
+                    raise ValueError("Bad date value: {}".format(date))
+            date = Time(date)
+
+        # for speed reasons we only compute positions every 10 seconds.
         if hasattr(self, 'time') and isinstance(self.time, Time):
-            dt = self.time - date
-            if math.fabs(dt.sec) < 10:
+            if -minimum_delta < self.time - date < minimum_delta:
                 return
+
         jd = ctypes.c_double(date.jd)
         if abg_file is None:
             abg_file = tempfile.NamedTemporaryFile(suffix='.abg')
             abg_file.write(self.abg)
             abg_file.seek(0)
+
         # call predict with agbfile, jdate, obscode
-        self.orbfit.predict.restype = ctypes.POINTER(ctypes.c_double * 5)
+        self.orbfit.predict.restype = ctypes.POINTER(ctypes.c_double * 6)
         self.orbfit.predict.argtypes = [ctypes.c_char_p, ctypes.c_double, ctypes.c_int]
         predict = self.orbfit.predict(ctypes.c_char_p(abg_file.name),
                                       jd,
@@ -365,6 +400,7 @@ class Orbfit(object):
         self._dra = predict.contents[2] * units.arcsec
         self._ddec = predict.contents[3] * units.arcsec
         self._pa = predict.contents[4] * units.degree
+        self._distance = predict.contents[5] * units.AU
         self._date = str(date)
         self._time = date
 
@@ -377,7 +413,6 @@ class Orbfit(object):
         """
         # rate of motion at a requested date rather than averaged over the arc.
         # Date is datetime.datetime() objects.
-        print date
         if date is None:
             if self.time is None:
                 date = datetime.datetime.now()
@@ -391,7 +426,6 @@ class Orbfit(object):
             except Exception as e:
                 logging.error(str(e))
                 return None
-        print date
         if isinstance(date, str):
             date = Time(date, scale='utc')
 
@@ -407,13 +441,16 @@ class Orbfit(object):
         coord2 = self.coordinate
         return coord1.separation(coord2).to(units.arcsec) / (24. * units.hour)  # arcsec/hr
 
-    def summarize(self, date=datetime.datetime.now()):
+    def summarize(self, date=None):
         """Return a string summary of the orbit.
+        :param date: Date to make the summary for
         :rtype: str
         """
 
-        assert isinstance(date, datetime.datetime)
-        at_date = date.strftime('%Y-%m-%d')
+        if date is None:
+            date = datetime.datetime.now()
+
+        at_date = Time(date)
         self.predict(at_date)
 
         fobj = StringIO()
@@ -430,24 +467,3 @@ class Orbfit(object):
 
         fobj.seek(0)
         return fobj.read()
-
-
-def main():
-    """
-
-    :rtype : None
-    """
-    import mpc
-
-    mpc_filename = 'o3o08.mpc'
-    observations = mpc.MPCReader().read(mpc_filename)
-
-    orbit = Orbfit(observations)
-    print orbit
-    orbit.predict(2456500.5)
-    print orbit.coordinate.ra.deg, orbit.coordinate.dec.deg
-    orbit.predict('2013-07-27.0')
-    print orbit.coordinate.ra.deg, orbit.coordinate.dec.deg
-
-if __name__ == '__main__':
-    main()
