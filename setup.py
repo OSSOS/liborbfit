@@ -23,5 +23,5 @@ setup(packages=['mp_ephem'],
           'src/orbfitmodule.c',
           'src/ran1.c',
           'src/transforms.c'], extra_compile_args=['-Wno-unused-variable'])],
-      requires=['astropy', 'numpy']
+      requires=['astropy', 'numpy', 'six']
       )
