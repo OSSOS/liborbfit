@@ -1,11 +1,14 @@
 from distutils.core import setup, Extension
 
+version = "0.1.0a"
+
 setup(packages=['mp_ephem'],
+      name='mp_ephem',
       package_dir={'mp_ephem': 'mp_ephem'},
       package_data={'mp_ephem': ['data/binEphem.405_32',
                                  'data/binEphem.405_64',
                                  'data/observatories.dat']},
-      version='1.0',
+      version=version,
       ext_modules=[Extension('mp_ephem.orbit', [
           'src/aeiderivs.c',
           'src/covsrt.c',
@@ -23,5 +26,20 @@ setup(packages=['mp_ephem'],
           'src/orbfitmodule.c',
           'src/ran1.c',
           'src/transforms.c'], extra_compile_args=['-Wno-unused-variable'])],
-      requires=['astropy', 'numpy', 'six']
+      requires=['astropy', 'numpy', 'six'],
+      url='http://github.com/OSSOS/liborbfit',
+      author='''JJ Kavelaars (jjk@uvic.ca),
+              Michele Bannister (micheleb@uvic.ca)''',
+      maintainer='M Bannister and JJ Kavelaars',
+      maintainer_email='jjk@uvic.ca',
+      description="Various tools for dealing wiht Minor Planet astrometry, including fitting and searching",
+      long_description='',
+      classifiers=['Intended Audience :: Science/Research',
+                   'Topic :: Scientific/Engineering :: Astronomy',
+                   'Development Status :: 4 - Beta',
+                   'Programming Language :: Python :: 2 :: Only',
+                   'Operating System :: MacOS :: MacOS X',
+                   'Environment :: X11 Applications',
+                   'License :: OSI Approved :: GNU General Public License (GPL)',
+                   ],
       )
