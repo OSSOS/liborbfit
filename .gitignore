@@ -2,3 +2,6 @@
 build
 CVS
 *.pyc
+dist
+MANIFEST
+.idea
