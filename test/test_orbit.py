@@ -9,6 +9,7 @@ class OrbitFit(unittest.TestCase):
     def setUp(self):
         mpc_filename = 'data/o3o08.mpc'
         self.observations = mp_ephem.EphemerisReader().read(mpc_filename)
+        self.orbit = mp_ephem.BKOrbit(self.observations)
 
     def test_orbit(self):
         """
@@ -16,8 +17,6 @@ class OrbitFit(unittest.TestCase):
 
         :return:
         """
-        self.orbit = mp_ephem.BKOrbit(self.observations)
-        print(self.orbit)
         self.assertAlmostEqual(self.orbit.a.to(units.AU).value, 39.3419, 3)
         self.assertAlmostEqual(self.orbit.e.value, 0.2778, 3)
         self.assertAlmostEqual(self.orbit.inc.to(units.degree).value, 8.05, 2)
@@ -32,7 +31,6 @@ class OrbitFit(unittest.TestCase):
         :return:
         """
 
-        print os.environ['ORBIT_EPHEMERIS']
         self.assertTrue(os.access(os.environ['ORBIT_EPHEMERIS'], os.R_OK))
         self.assertTrue(os.access(os.environ['ORBIT_OBSERVATORIES'], os.R_OK))
 
@@ -64,4 +62,4 @@ class OrbitFit(unittest.TestCase):
             observations.append(mp_ephem.Observation.from_string(line))
 
         this_orbit = mp_ephem.BKOrbit(observations)
-        self.assertAlmostEqual(this_orbit.a, 135.75, 1)
+        self.assertAlmostEqual(this_orbit.a.to(units.au).value, 137.91, 1)
