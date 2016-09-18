@@ -3,7 +3,6 @@ import datetime
 import logging
 import math
 import numpy
-from StringIO import StringIO
 import tempfile
 import os
 from astropy.coordinates import SkyCoord
@@ -57,6 +56,10 @@ class BKOrbit(object):
         self._a = self._e = self._inc = self._Node = self._om = self._T = None
         self._da = self._de = self._dinc = self._dNode = self._dom = self._dT = None
         self._coordinate = self._pa = self._dra = self._ddec = self._date = self._time = None
+        self._distance = None
+        self._distance_uncertainty = None
+        self._residuals = None
+        self._overall_residuals = []
         self._fit_radec()
 
     def _fit_radec(self):
@@ -105,6 +108,7 @@ class BKOrbit(object):
         self._epoch = Time(result.contents[12] * units.day, scale='utc', format='jd')
         _abg_file.seek(0)
         self.abg = _abg_file.read()
+        self._compute_residuals()
 
     @property
     def a(self):
@@ -212,17 +216,10 @@ class BKOrbit(object):
         """
         return self._dT
 
-    @property
-    def residuals(self, overall=False):
+    def _compute_residuals(self):
         """
-        Builds a summary of the residuals of a fit.  This is useful for visually examining the
-        goodness of fit for a small number of observations and the impact of adding a few tentative observations.
-        :param overall: should we return the string with the residuals or a list containing the overall residuals?
-        :return: A string representation of the residuals between the best fit orbit and  astrometric measurements.
-        :rtype: str
+        Builds a summary of the residuals of a fit and loads those into the observation objects.
         """
-        _residuals = ""
-        overall_resids = []
         for observation in self.observations:
             self.predict(observation.date)
             coord1 = SkyCoord(self.coordinate.ra, self.coordinate.dec)
@@ -232,14 +229,25 @@ class BKOrbit(object):
             coord2 = SkyCoord(self.coordinate.ra, observation.coordinate.dec)
             observation.dec_residual = float(coord1.separation(coord2).arcsec)
             observation.dec_residual = (coord1.dec.degree - coord2.dec.degree) * 3600.0
-            overall_resids.append(math.sqrt(observation.ra_residual ** 2 + observation.dec_residual ** 2))
-            _residuals += "{:1s}{:12s} {:+05.2f} {:+05.2f} # {}\n".format(
-                observation.null_observation, observation.date, observation.ra_residual, observation.dec_residual,
-                observation)
-        if overall:
-            return overall_resids  # values in arcsec
-        else:
-            return _residuals
+
+    @property
+    def overall_residuals(self):
+        _overall_residuals = []
+        for observation in self.observations:
+            _overall_residuals.append(math.sqrt(observation.ra_residual ** 2 + observation.dec_residual ** 2))
+        return _overall_residuals  # values in arcsec
+
+    @property
+    def residuals(self):
+        if self._residuals is None:
+            self._fit_radec()
+            _residuals = ""
+            for observation in self.observations:
+                _residuals += "{:1s}{:12s} {:+05.2f} {:+05.2f} # {}\n".format(
+                    observation.null_observation, observation.date, observation.ra_residual, observation.dec_residual,
+                    observation)
+            self._residuals = _residuals
+        return self._residuals
 
     @property
     def coordinate(self):
@@ -338,7 +346,7 @@ class BKOrbit(object):
                                                                                   self.inc,
                                                                                   self.Node,
                                                                                   self.om)
-        res += "{:>10s} {:8.2f} {:8.2f} {:8.2f} {:8.2f} {:8.2f} {:8.2f}\n".format("uncert",
+        res += "{:>10s} {:8.2f} {:8.2f} {:8.2f} {:8.2f} {:8.2f} {:8.2f}\n".format("uncertainty",
                                                                                   self.distance_uncertainty,
                                                                                   self.da,
                                                                                   self.de,
@@ -356,13 +364,13 @@ class BKOrbit(object):
     def predict(self, date, obs_code=568, abg_file=None, minimum_delta=None):
         """
         use the bk predict method to compute the location of the source on the given date.
+
+        this methods sets the values of coordinate, dra (arc seconds), ddec (arc seconds), pa, (degrees) and date (str)
+
         @param date: the julian date of interest or an astropy.core.time.Time object.
-        @param obs_code: the Minor Planet Center observatory location code (Mauna Kea: 568 is the default)
-
-        this methods sets the values of coordinate, dra (arcseconds), ddec (arcseconds), pa, (degrees) and date (str)
-        :param abg_file: name of the file containing the BK orbit ABG data.
-        :param minimum_delta: the smallest time offset between computing positions, otherwise use previous position.
-
+        @param obs_code: the Minor Planet Center observatory location code (Maunakea: 568 is the default)
+        @param minimum_delta: minimum difference in time between recomputing a predicted location.
+        @param abg_file: the 'abg' formatted file to use for the prediction.
         """
 
         if minimum_delta is None:
@@ -374,20 +382,21 @@ class BKOrbit(object):
                     date = Time(date, format='jd', scale='utc', precision=6)
                 except:
                     raise ValueError("Bad date value: {}".format(date))
-            date = Time(date)
+            _date = Time(date)
+        else:
+            _date = date
 
         # for speed reasons we only compute positions every 10 seconds.
         if hasattr(self, 'time') and isinstance(self.time, Time):
-            if -minimum_delta < self.time - date < minimum_delta:
+            if -minimum_delta < self.time - _date < minimum_delta:
                 return
 
-        jd = ctypes.c_double(date.jd)
+        jd = ctypes.c_double(_date.jd)
         if abg_file is None:
             abg_file = tempfile.NamedTemporaryFile(suffix='.abg')
             abg_file.write(self.abg)
             abg_file.seek(0)
 
-        # call predict with agbfile, jdate, obscode
         self.orbfit.predict.restype = ctypes.POINTER(ctypes.c_double * 6)
         self.orbfit.predict.argtypes = [ctypes.c_char_p, ctypes.c_double, ctypes.c_int]
         predict = self.orbfit.predict(ctypes.c_char_p(abg_file.name),
@@ -396,13 +405,13 @@ class BKOrbit(object):
         self._coordinate = SkyCoord(predict.contents[0],
                                     predict.contents[1],
                                     unit=(units.degree, units.degree),
-                                    obstime=date)
+                                    obstime=_date)
         self._dra = predict.contents[2] * units.arcsec
         self._ddec = predict.contents[3] * units.arcsec
         self._pa = predict.contents[4] * units.degree
         self._distance = predict.contents[5] * units.AU
-        self._date = str(date)
-        self._time = date
+        self._date = str(_date)
+        self._time = _date
 
     def rate_of_motion(self, date=None):
         """
@@ -430,16 +439,16 @@ class BKOrbit(object):
             date = Time(date, scale='utc')
 
         try:
-            sdate = date.jd
-            edate = date.jd + 1
+            start_date = date.jd
+            end_date = date.jd + 1
         except Exception as e:
             logging.error(str(e))
             return None
-        self.predict(edate)
+        self.predict(end_date)
         coord1 = self.coordinate
-        self.predict(sdate)
+        self.predict(start_date)
         coord2 = self.coordinate
-        return coord1.separation(coord2).to(units.arcsec) / (24. * units.hour)  # arcsec/hr
+        return coord1.separation(coord2).to(units.arcsec) / (24. * units.hour)  # arc seconds / hr
 
     def summarize(self, date=None):
         """Return a string summary of the orbit.
@@ -453,17 +462,11 @@ class BKOrbit(object):
         at_date = Time(date)
         self.predict(at_date)
 
-        fobj = StringIO()
+        summary = "\n"
+        summary += str(self) + "\n"
+        summary += str(self.residuals) + "\n"
+        summary += 'arc length {} '.format(self.arc_length)
+        summary += "Expected accuracy on {:>10s}: {:6.2f} {:6.2f} moving at {:6.2f} \n\n".format(
+            at_date, self.dra, self.ddec, self.rate_of_motion(date=date))
 
-        # for observation in self.observations:
-        # fobj.write(observation.to_string()+"\n")
-
-        fobj.write("\n")
-        fobj.write(str(self) + "\n")
-        fobj.write(str(self.residuals) + "\n")
-        fobj.write('arclen {} '.format(self.arc_length))
-        fobj.write("Expected accuracy on {:>10s}: {:6.2f} {:6.2f} moving at {:6.2f} \n\n".format(
-            at_date, self.dra, self.ddec, self.rate_of_motion(date=date)))
-
-        fobj.seek(0)
-        return fobj.read()
+        return summary

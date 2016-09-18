@@ -570,8 +570,8 @@ class Observation(object):
         comment = mpc_line[81:]
         mpc_line = mpc_line[0:80]
         if len(mpc_line) != 80:
-            logging.error("{}".format(mpc_line))
-            logging.error("mpc line is only {} chars long, trying .ted format".format(len(mpc_line)))
+            logging.info("{}".format(mpc_line))
+            logging.info("mpc line is only {} chars long, trying .ted format".format(len(mpc_line)))
             try:
                 return cls.from_ted(mpc_line)
             except Exception as ex:
