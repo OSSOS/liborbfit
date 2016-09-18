@@ -17,13 +17,14 @@ class OrbitFit(unittest.TestCase):
         :return:
         """
         self.orbit = mp_ephem.BKOrbit(self.observations)
-        self.assertAlmostEqual(self.orbit.a, 33.3 * units.AU)
-        self.assertAlmostEqual(self.orbit.e, 0.1)
-        self.assertAlmostEqual(self.orbit.inc, 1.00 * units.degree)
-        self.assertAlmostEqual(self.orbit.Node, 180.0 * units.degree)
-        self.assertAlmostEqual(self.orbit.om, 180.0 * units.degree)
-        self.assertAlmostEqual(self.orbit.T, 2450000.0 * units.day)
-        self.assertAlmostEqual(self.orbit.epoch, 2450000.0 * units.day)
+        print(self.orbit)
+        self.assertAlmostEqual(self.orbit.a.to(units.AU).value, 39.3419, 3)
+        self.assertAlmostEqual(self.orbit.e.value, 0.2778, 3)
+        self.assertAlmostEqual(self.orbit.inc.to(units.degree).value, 8.05, 2)
+        self.assertAlmostEqual(self.orbit.Node.to(units.degree).value, 113.85, 2)
+        self.assertAlmostEqual(self.orbit.om.to(units.degree).value, 66.24, 2)
+        self.assertAlmostEqual(self.orbit.T.to(units.day).value, 2447884.5070, 3)
+        self.assertAlmostEqual(self.orbit.epoch.jd, 2456392.05115, 4)
 
     def test_data(self):
         """
