@@ -1,20 +1,11 @@
+import logging
 from datetime import datetime
 import numpy
 import re
 import time
 import six
+from astropy._erfa import d2dtf, dtf2d
 from astropy.time import TimeString
-try:
-    from astropy._erfa_time import d2dtf
-    from astropy._erfa_time import dtf2d
-except:
-    try:
-        from astropy.time.erfa_time import jd_dtf as d2dtf
-        from astropy.time.erfa_time import dtf_jd as dtf2d
-
-    except ImportError:
-        from astropy.time.sofa_time import jd_dtf as d2dtf
-        from astropy.time.sofa_time import dtf_jd as drf2d
 
 
 class TimeMPC(TimeString):
@@ -50,10 +41,10 @@ class TimeMPC(TimeString):
         subfmts = self._select_subfmts(self.in_subfmt)
 
         iterator = numpy.nditer([val1, None, None, None, None, None, None],
-                             op_dtypes=[val1.dtype] + 5*[numpy.intc] + [numpy.double])
+                                op_dtypes=[val1.dtype] + 5 * [numpy.intc] + [numpy.double])
 
-        for val, iy, im, id, ihr, imin, dsec in iterator:
-            iy[...], im[...], id[...], ihr[...], imin[...], dsec[...] = (
+        for val, iy, im, i_day, ihr, i_min, d_sec in iterator:
+            iy[...], im[...], i_day[...], ihr[...], i_min[...], d_sec[...] = (
                 self.parse_string(val.item(), subfmts))
 
         self.jd1, self.jd2 = dtf2d(
@@ -85,6 +76,7 @@ class TimeMPC(TimeString):
                 try:
                     tm = time.strptime(timestr, strptime_fmt_or_regex)
                 except ValueError as ex:
+                    logging.debug(str(ex))
                     continue
                 else:
                     vals = [getattr(tm, 'tm_' + component)
@@ -142,4 +134,3 @@ class TimeMPC(TimeString):
             yield {'year': int(iy), 'mon': int(im), 'day': int(iday),
                    'hour': int(ihr), 'min': int(imin), 'sec': int(isec),
                    'fracsec': int(ifracsec), 'yday': yday, 'fracday': fracday}
-
