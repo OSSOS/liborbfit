@@ -9,16 +9,11 @@ from astropy.time import Time
 
 __author__ = 'jjk, mtb55'
 
-DEFAULT_OBSERVERS = ['M. T. Bannister',
-                     'J. J. Kavelaars',
-                     'B. J. Gladman',
-                     'J.-M. Petit',
-                     'T. Burdullis'
+DEFAULT_OBSERVERS = ['M.P. Centre',
                      ]
-DEFAULT_MEASURERS = ['S. D. J. Gwyn',
-                     'Y.-T. Chen.'
+DEFAULT_MEASURERS = ['I.C. You',
                      ]
-DEFAULT_TELESCOPE = "CFHT 3.6m + CCD"
+DEFAULT_TELESCOPE = "OBSER+Size CCD"
 DEFAULT_ASTROMETRIC_NETWORK = "UCAC4"
 
 MPCNOTES = {"Note1": {" ": " ",
