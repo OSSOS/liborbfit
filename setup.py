@@ -1,8 +1,10 @@
 import os
 import sys
 from setuptools import setup, find_packages, Extension
+from mp_ephem import __version__
 
-version = open('mp_ephem/__version__.py').read().split("=")[1].strip()
+version = __version__.version
+print version
 
 dependencies = ['astropy >= 1.0',
                 'numpy >= 1.6.1',
@@ -32,25 +34,28 @@ setup(name='mp_ephem',
       package_data={'mp_ephem': ['data/*']},
       install_requires=dependencies,
       packages=find_packages(exclude=['test', ]),
-      ext_modules=[Extension('mp_ephem.orbit', [
-          'src/aeiderivs.c',
-          'src/covsrt.c',
-          'src/dms.c',
-          'src/ephem_earth.c',
-          'src/gasdev.c',
-          'src/gaussj.c',
-          'src/lubksb.c',
-          'src/ludcmp.c',
-          'src/mrqcof_orbit.c',
-          'src/mrqmin_orbit.c',
-          'src/nrutil.c',
-          'src/orbfit1.c',
-          'src/orbfit2.c',
-          'src/orbfitmodule.c',
-          'src/ran1.c',
-          'src/orbfit.h',
-          'src/nrutil.h',
-          'src/ephem_types.h',
-          'src/ephem_read.h',
-          'src/transforms.c'], extra_compile_args=['-Wno-unused-variable'])],
+      ext_modules=[Extension('mp_ephem.orbit',
+                             [
+                                 'src/aeiderivs.c',
+                                 'src/covsrt.c',
+                                 'src/dms.c',
+                                 'src/ephem_earth.c',
+                                 'src/gasdev.c',
+                                 'src/gaussj.c',
+                                 'src/lubksb.c',
+                                 'src/ludcmp.c',
+                                 'src/mrqcof_orbit.c',
+                                 'src/mrqmin_orbit.c',
+                                 'src/nrutil.c',
+                                 'src/orbfit1.c',
+                                 'src/orbfit2.c',
+                                 'src/orbfitmodule.c',
+                                 'src/ran1.c',
+                                 'src/transforms.c'],
+                             extra_compile_args=['-Wno-unused-variable'],
+                             headers=['src/orbfit.h',          
+                                      'src/nrutil.h',          
+                                      'src/ephem_types.h',          
+                                      'src/ephem_read.h',]
+                             )],
       )
