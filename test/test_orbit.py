@@ -8,6 +8,7 @@ class OrbitFit(unittest.TestCase):
 
     def setUp(self):
         mpc_filename = 'data/o3o08.mpc'
+        self.abg_filename = 'data/o3o08.abg'
         self.observations = mp_ephem.EphemerisReader().read(mpc_filename)
         self.orbit = mp_ephem.BKOrbit(self.observations)
 
@@ -34,6 +35,19 @@ class OrbitFit(unittest.TestCase):
         self.assertTrue(os.access(os.environ['ORBIT_EPHEMERIS'], os.R_OK))
         self.assertTrue(os.access(os.environ['ORBIT_OBSERVATORIES'], os.R_OK))
 
+    def test_abg_load(self):
+        """
+        Test that loading an abg file returns the same results as calling fit_radec
+        :return:
+        """
+
+        orbit1 = mp_ephem.BKOrbit(self.observations, abg_file=self.abg_filename)
+        orbit2 = mp_ephem.BKOrbit(self.observations)
+        for attr in ['a', 'e', 'Node', 'inc', 'om', 'T', 'distance']:
+            self.assertEqual(getattr(orbit1, attr),
+                             getattr(orbit2, attr))
+
+
     def test_orbfit_residuals(self):
         mpc_lines = ("     HL7j2    C2013 04 03.62926 17 12 01.16 +04 13 33.3          24.1 R      568",
                      "     HL7j2    C2013 04 04.58296 17 11 59.80 +04 14 05.5          24.0 R      568",
@@ -48,6 +62,7 @@ class OrbitFit(unittest.TestCase):
 
         for observation in observations:
             this_orbit.predict(observation.date, 568)
+            this_orbit.compute_residuals()
             self.assertLess(observation.ra_residual, 0.3)
             self.assertLess(observation.dec_residual, 0.3)
 

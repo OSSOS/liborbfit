@@ -9,6 +9,7 @@ from astropy.coordinates import SkyCoord
 from astropy import units
 from astropy.units.quantity import Quantity
 from astropy.time import Time
+from .ephem import  EphemerisReader
 
 __author__ = 'jjk'
 
@@ -24,7 +25,7 @@ class BKOrbit(object):
     This class provides orbital information derived by calling 'fit_radec'.
     """
 
-    def __init__(self, observations):
+    def __init__(self, observations, ast_filename=None, abg_file=None):
         """
         Given a list of mpc.Observations, compute the orbit using fit_radec and provide methods for
         accessing that orbit.
@@ -46,13 +47,14 @@ class BKOrbit(object):
                                                                    'observatories.dat'))
         liborbfit = os.path.join(__ORBFIT_LIB__)
         self.orbfit = ctypes.CDLL(liborbfit)
-
-        assert isinstance(observations, tuple) or isinstance(observations, list) or isinstance(observations,
+        if ast_filename is None:
+            assert isinstance(observations, tuple) or isinstance(observations, list) or isinstance(observations,
                                                                                                numpy.ndarray)
 
-        if len(observations) < 3:
-            raise BKOrbitError()
         self.observations = observations
+        self.abg_filename = abg_file
+        self.ast_filename = ast_filename
+        self.abg = None
         self._a = self._e = self._inc = self._Node = self._om = self._T = None
         self._da = self._de = self._dinc = self._dNode = self._dom = self._dT = None
         self._coordinate = self._pa = self._dra = self._ddec = self._date = self._time = None
@@ -64,35 +66,47 @@ class BKOrbit(object):
 
     def _fit_radec(self):
 
-        _abg_file = tempfile.NamedTemporaryFile(suffix='.abg')
-        _mpc_file = tempfile.NamedTemporaryFile(suffix='.mpc')
 
         # call fit_radec with mpcfile and abgfile
         self.orbfit.fitradec.restype = ctypes.POINTER(ctypes.c_double * 2)
         self.orbfit.fitradec.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
-        for observation in self.observations:
-            try:
-                if observation.null_observation:
-                    continue
-            except:
-                pass
-            obs = observation
-            self.name = observation.provisional_name
-            ra = obs.ra.replace(" ", ":")
-            dec = obs.dec.replace(" ", ":")
-            res = getattr(obs.comment, 'plate_uncertainty', 0.2)
-            _mpc_file.write("{} {} {} {} {}\n".format(obs.date.jd, ra, dec, res, 568, ))
-        _mpc_file.seek(0)
-        result = self.orbfit.fitradec(ctypes.c_char_p(_mpc_file.name),
-                                      ctypes.c_char_p(_abg_file.name))
-        self._distance = result.contents[0] * units.AU
-        self._distance_uncertainty = result.contents[1] * units.AU
+        build_abg = True
+        if self.abg_filename is not None and os.access(self.abg_filename, os.R_OK):
+            build_abg = False
+            _abg_file = open(self.abg_filename, 'r')
+        if build_abg:
+            if self.observations is None:
+                self.observations = EphemerisReader().read(self.ast_filename)
+            _mpc_file = tempfile.NamedTemporaryFile(suffix='.mpc')
+            if len(self.observations) < 3:
+                raise BKOrbitError()
+
+            for observation in self.observations:
+                try:
+                    if observation.null_observation:
+                        continue
+                except:
+                    pass
+                obs = observation
+                self.name = obs.provisional_name
+                ra = obs.ra.replace(" ", ":")
+                dec = obs.dec.replace(" ", ":")
+                res = getattr(obs.comment, 'plate_uncertainty', 0.2)
+                _mpc_file.write("{} {} {} {} {}\n".format(obs.date.jd, ra, dec, res, 568, ))
+            _mpc_file.seek(0)
+            if self.abg_filename is None:
+                _abg_file = tempfile.NamedTemporaryFile(suffix='.abg')
+            else:
+                _abg_file = open(self.abg_filename, 'w+')
+            result = self.orbfit.fitradec(ctypes.c_char_p(_mpc_file.name),
+                                          ctypes.c_char_p(_abg_file.name))
+
+        _abg_file.seek(0)
 
         # call abg_to_aei to get elliptical elements and their chi^2 uncertainty.
-        self.orbfit.abg_to_aei.restype = ctypes.POINTER(ctypes.c_double * 13)
+        self.orbfit.abg_to_aei.restype = ctypes.POINTER(ctypes.c_double * 15)
         self.orbfit.abg_to_aei.argtypes = [ctypes.c_char_p]
         result = self.orbfit.abg_to_aei(ctypes.c_char_p(_abg_file.name))
-
         self._a = result.contents[0] * units.AU
         self._da = result.contents[6] * units.AU
         self._e = result.contents[1] * units.dimensionless_unscaled
@@ -107,8 +121,10 @@ class BKOrbit(object):
         self._dT = result.contents[11] * units.day
         self._epoch = Time(result.contents[12] * units.day, scale='utc', format='jd')
         _abg_file.seek(0)
+        self._distance = result.contents[13] * units.au
+        self._distance_uncertainty = result.contents[14] * units.au
         self.abg = _abg_file.read()
-        self._compute_residuals()
+        self._residuals = None
 
     @property
     def a(self):
@@ -216,7 +232,24 @@ class BKOrbit(object):
         """
         return self._dT
 
-    def _compute_residuals(self):
+    @property
+    def ra(self):
+        """
+        :return: Right Ascention in Equaltorial J2000 coordinates.
+        :rtype: Quantity
+        """
+        self.coordinate.ra
+
+    @property
+    def dec(self):
+        """
+        :return: Declination in Equaltorial J2000 coordinates.
+        :rtype: Quantity
+        """
+        self.coordinate.dec
+
+
+    def compute_residuals(self):
         """
         Builds a summary of the residuals of a fit and loads those into the observation objects.
         """
@@ -240,7 +273,7 @@ class BKOrbit(object):
     @property
     def residuals(self):
         if self._residuals is None:
-            self._fit_radec()
+            self.compute_residuals()
             _residuals = ""
             for observation in self.observations:
                 _residuals += "{:1s}{:12s} {:+05.2f} {:+05.2f} # {}\n".format(

@@ -54,7 +54,7 @@ double *fitradec(char *mpc_filename, char *abg_filename)
 
   fprintf(abg_file, "# Covariance matrix: \n");
 
-  print_matrix(abg_file,covar,6,6);
+  print_matrix(abg_file, covar, 6, 6);
 
 
 
@@ -98,7 +98,7 @@ double *predict(char *abg_file, double jdate, int obscode)
   PBASIS p;
   OBSERVATION	futobs;
   struct date_time dt;
-  char	inbuff[256],rastring[20],decstring[20];
+  char	inbuff[256], rastring[20], decstring[20];
   char  outbuff[256];
   char  *f_string;
   double **covar,**sigxy,a,b,PA,**derivs;
@@ -187,7 +187,8 @@ double *abg_to_aei(char *abg_file)
   PBASIS p;
   XVBASIS xv;
   ORBIT orbit;
-  static double result[13];
+  static double result[15];
+  double d, dd;
   double  **covar_abg, **covar_xyz, **derivs, **covar_aei;
 
   int	i,j;
@@ -217,6 +218,8 @@ double *abg_to_aei(char *abg_file)
   /* Transform xyz basis to orbital parameters */
   orbitElements(&xv, &orbit);
 
+  d = sqrt(xBary*xBary + yBary*yBary + pow(zBary-1/p.g,2.));
+  dd = d*d*sqrt(covar_abg[5][5]);
 
   /* Print out the results, with comments */
   /*
@@ -247,6 +250,8 @@ double *abg_to_aei(char *abg_file)
   result[10] = sqrt(covar_aei[5][5])/DTOR;
   result[11] = sqrt(covar_aei[6][6])/DAY;
   result[12] = jd0;
+  result[13] = d;
+  result[14] = dd;
 
   free_dmatrix(covar_abg,1,6,1,6);
   free_dmatrix(covar_xyz,1,6,1,6);
