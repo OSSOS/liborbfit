@@ -9,7 +9,7 @@ from astropy.coordinates import SkyCoord
 from astropy import units
 from astropy.units.quantity import Quantity
 from astropy.time import Time
-from .ephem import  EphemerisReader
+from .ephem import  EphemerisReader, Observation
 
 __author__ = 'jjk'
 
@@ -87,12 +87,13 @@ class BKOrbit(object):
                         continue
                 except:
                     pass
+                assert isinstance(observation, Observation)
                 obs = observation
                 self.name = obs.provisional_name
                 ra = obs.ra.replace(" ", ":")
                 dec = obs.dec.replace(" ", ":")
                 res = getattr(obs.comment, 'plate_uncertainty', 0.2)
-                _mpc_file.write("{} {} {} {} {}\n".format(obs.date.jd, ra, dec, res, 568, ))
+                _mpc_file.write("{} {} {} {} {}\n".format(obs.date.jd, ra, dec, res, obs.observatory_code ))
             _mpc_file.seek(0)
             if self.abg_filename is None:
                 _abg_file = tempfile.NamedTemporaryFile(suffix='.abg')
