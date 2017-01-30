@@ -9,7 +9,7 @@ from astropy.coordinates import SkyCoord
 from astropy import units
 from astropy.units.quantity import Quantity
 from astropy.time import Time
-from .ephem import  EphemerisReader
+from .ephem import  EphemerisReader, Observation
 
 __author__ = 'jjk'
 
@@ -51,7 +51,8 @@ class BKOrbit(object):
             assert isinstance(observations, tuple) or isinstance(observations, list) or isinstance(observations,
                                                                                                numpy.ndarray)
 
-        self.observations = observations
+        self._observations = observations
+        self._r_mag = None
         self.abg_filename = abg_file
         self.ast_filename = ast_filename
         self.abg = None
@@ -64,6 +65,33 @@ class BKOrbit(object):
         self._overall_residuals = []
         self._fit_radec()
 
+    @property
+    def observations(self):
+        if self._observations is None:
+             self._observations = EphemerisReader().read(self.ast_filename)
+        return self._observations
+
+    def compute_median_mag(self, band):
+        mags = []
+        for observation in self.observations:
+            if observation.mag is not None and observation.band is not None and observation.band.lower() == band:
+                mags.append(float(observation.mag))
+        if len(mags) > 0:
+            return numpy.percentile(mags, 50)
+        return None
+
+    @property
+    def r_mag(self):
+        offsets = {'r': 0.0, 'g': -0.7, 'i': +0.4, 'w': -0.2}
+        bands = ['r', 'g', 'i', 'w']
+        if self._r_mag is None:
+            for band in bands:
+                mag = self.compute_median_mag(band)
+                if mag is not None:
+                    self._r_mag = mag + offsets[band]
+                    break
+        return self._r_mag
+
     def _fit_radec(self):
 
 
@@ -75,8 +103,6 @@ class BKOrbit(object):
             build_abg = False
             _abg_file = open(self.abg_filename, 'r')
         if build_abg:
-            if self.observations is None:
-                self.observations = EphemerisReader().read(self.ast_filename)
             _mpc_file = tempfile.NamedTemporaryFile(suffix='.mpc')
             if len(self.observations) < 3:
                 raise BKOrbitError()
@@ -87,12 +113,13 @@ class BKOrbit(object):
                         continue
                 except:
                     pass
+                assert isinstance(observation, Observation)
                 obs = observation
                 self.name = obs.provisional_name
                 ra = obs.ra.replace(" ", ":")
                 dec = obs.dec.replace(" ", ":")
                 res = getattr(obs.comment, 'plate_uncertainty', 0.2)
-                _mpc_file.write("{} {} {} {} {}\n".format(obs.date.jd, ra, dec, res, 568, ))
+                _mpc_file.write("{} {} {} {} {}\n".format(obs.date.jd, ra, dec, res, obs.observatory_code ))
             _mpc_file.seek(0)
             if self.abg_filename is None:
                 _abg_file = tempfile.NamedTemporaryFile(suffix='.abg')

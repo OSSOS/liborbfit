@@ -564,7 +564,7 @@ class Observation(object):
 
         comment = mpc_line[81:]
         mpc_line = mpc_line[0:80]
-        if len(mpc_line) != 80:
+        if len(mpc_line) != 80 and len(mpc_line)>0:
             logging.info("{}".format(mpc_line))
             logging.info("mpc line is only {} chars long, trying .ted format".format(len(mpc_line)))
             try:
@@ -599,8 +599,9 @@ class Observation(object):
             except:
                 obsrec = None
 
-        if not obsrec:
-            logging.error("Failed to parse line: {}".format(mpc_line))
+        if obsrec is None or not obsrec:
+            if mpc_line is not None and len(mpc_line) > 0:
+                logging.error("Failed to parse line: {}".format(mpc_line))
             return obsrec
 
         obsrec.comment = MPCComment.from_string(comment)
@@ -979,9 +980,9 @@ class OSSOSComment(object):
                          y=values[5].strip(),
                          comment=comment_string.strip())
         except Exception as e:
-            logging.error(values)
-            logging.error(comment)
-            logging.error(str(e))
+            logging.debug(values)
+            logging.debug(comment)
+            logging.debug(str(e))
             raise e
 
         retval.version = values[0]
