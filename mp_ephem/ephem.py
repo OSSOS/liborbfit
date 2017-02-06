@@ -16,6 +16,15 @@ DEFAULT_MEASURERS = ['I.C. You',
 DEFAULT_TELESCOPE = "OBSER+Size CCD"
 DEFAULT_ASTROMETRIC_NETWORK = "UCAC4"
 
+_KNOWN_OBSERVAOTRY_CODES = []
+__PATH__ = os.path.dirname(__file__)
+with open(os.getenv('ORBIT_OBSERVATORIES', os.path.join(__PATH__, 'data', 'observatories.dat')),'r') as observatories:
+    for line in observatories.readlines():
+        if line.startswith('#'):
+            continue
+        _KNOWN_OBSERVAOTRY_CODES.append(line.split()[0])
+
+
 MPCNOTES = {"Note1": {" ": " ",
                       "": " ",
                       "*": "*",
@@ -879,6 +888,8 @@ class Observation(object):
     @observatory_code.setter
     def observatory_code(self, observatory_code):
         observatory_code = str(observatory_code)
+        if observatory_code not in _KNOWN_OBSERVAOTRY_CODES:
+            observatory_code = "500"
         if not len(observatory_code) <= 3:
             raise MPCFieldFormatError("Observatory code",
                                       "must be 3 characters or less",
