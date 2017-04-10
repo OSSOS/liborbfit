@@ -52,8 +52,10 @@
 1689 111:41:35.2  34:55:07.3  2200.00 Kachina Observatory, Flagstaff
 1696 110:47:19.4  32:18:58.2  2200.00 Mt. Lemmon Survey <http://www.lpl.arizona.edu/css/>
 1706 105:31:43.3  32:54:11.9  2225.00 iTelescope Observatory, Mayhill
-3284  70:48:23.1 -30:00:09.79 2000 Cerro Tololo-DECam
+1284  70:48:23.1 -30:00:09.79 2000 Cerro Tololo-DECam
 # For orbiting spacecraft:
 #code inclination  period  precess_P  jd0   ra0  name
 #       (deg)      (days)  (days)          (deg)
-4000  28.48       0.067125   56.     2452066.  255  Pseudo-HST
+4000  28.48       0.067125   56.     2452066.    255   Pseudo-HST
+2001  28.4693     0.066281   56.     2457848.08  154.5 Pseudo-HST
+2002  28.48       0.067125   56.     2452066.  255  Pseudo-HST
