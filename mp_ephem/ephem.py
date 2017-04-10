@@ -605,7 +605,8 @@ class Observation(object):
                         "plate_uncertainty": _parts[3],
                         "observatory_code": _parts[4]}
                 obsrec = cls(**args)
-            except:
+                return obsrec
+            except Exception as ex:
                 obsrec = None
 
         if obsrec is None or not obsrec:
@@ -890,7 +891,7 @@ class Observation(object):
         observatory_code = str(observatory_code)
         if observatory_code not in _KNOWN_OBSERVAOTRY_CODES:
             observatory_code = "500"
-        if not len(observatory_code) <= 3:
+        if not len(observatory_code) <= 4:
             raise MPCFieldFormatError("Observatory code",
                                       "must be 3 characters or less",
                                       observatory_code)
