@@ -119,7 +119,7 @@ class BKOrbit(object):
                 ra = obs.ra.replace(" ", ":")
                 dec = obs.dec.replace(" ", ":")
                 res = getattr(obs.comment, 'plate_uncertainty', 0.2)
-                _mpc_file.write("{} {} {} {} {}\n".format(obs.date.jd, ra, dec, res, obs.observatory_code ))
+                _mpc_file.write("{} {} {} {} {}\n".format(obs.date.jd, ra, dec, res, int(obs.observatory_code) ))
             _mpc_file.seek(0)
             if self.abg_filename is None:
                 _abg_file = tempfile.NamedTemporaryFile(suffix='.abg')
@@ -281,7 +281,7 @@ class BKOrbit(object):
         Builds a summary of the residuals of a fit and loads those into the observation objects.
         """
         for observation in self.observations:
-            self.predict(observation.date)
+            self.predict(observation.date, obs_code=int(observation.observatory_code))
             coord1 = SkyCoord(self.coordinate.ra, self.coordinate.dec)
             coord2 = SkyCoord(observation.coordinate.ra, self.coordinate.dec)
             observation.ra_residual = float(coord1.separation(coord2).arcsec)
