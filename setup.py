@@ -7,7 +7,7 @@ version = __version__.version
 
 dependencies = ['astropy >= 1.0',
                 'numpy >= 1.6.1',
-                'six']
+                'six', 'requests', 'scipy']
 
 if sys.version_info[0] > 2:
     print('mp_ephem package is only compatible with Python version 2.7+, not yet with 3.x')
@@ -34,7 +34,7 @@ setup(name='mp_ephem',
       package_data={'mp_ephem': ['data/*']},
       install_requires=dependencies,
       packages=find_packages(exclude=['test', ]),
-          ext_modules=[Extension('mp_ephem.orbit', sources,
+      ext_modules=[Extension('mp_ephem.orbit', sources,
                              extra_compile_args=['-Wno-unused-variable'],
                              )],
       )
