@@ -9,7 +9,7 @@ from astropy.coordinates import SkyCoord
 from astropy import units
 from astropy.units.quantity import Quantity
 from astropy.time import Time
-from .ephem import  EphemerisReader, Observation
+from .ephem import  EphemerisReader, ObsRecord
 
 __author__ = 'jjk'
 
@@ -113,7 +113,7 @@ class BKOrbit(object):
                         continue
                 except:
                     pass
-                assert isinstance(observation, Observation)
+                assert isinstance(observation, ObsRecord)
                 obs = observation
                 self.name = obs.provisional_name
                 ra = obs.ra.replace(" ", ":")

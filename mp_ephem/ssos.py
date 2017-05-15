@@ -120,7 +120,7 @@ class _SSOSParamDictBuilder(object):
         self._observations = []
         orbit_method_set = None
         for observation in observations:
-            use_bern = isinstance(observation, ephem.Observation)
+            use_bern = isinstance(observation, ephem.ObsRecord)
             self.orbit_method = use_bern and 'bern' or 'bynameCADC'
             orbit_method_set = orbit_method_set is None and self.orbit_method or orbit_method_set
             if orbit_method_set != self.orbit_method:
@@ -304,7 +304,7 @@ class Query(object):
     MPC-formatted moving object detection lines.
 
     Inputs:
-        - a list of ephem.Observation instances
+        - a list of ephem.ObsRecord instances
 
     Optional:
         - a tuple of the start and end times to be searched
