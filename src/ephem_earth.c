@@ -724,6 +724,7 @@ observatory_geocenter(double jd,
 
   /* fprintf(stderr, "Reading site entries\n"); */
 
+
   if (nsites<=0 && nspacecraft<=0) read_observatories(NULL);
 
   /* fprintf(stderr, "Read entries for %i sites\n", nsites); */
@@ -752,10 +753,35 @@ observatory_geocenter(double jd,
     topo(obslmst*PI/12., obslat, obsalt, xobs, yobs, zobs);
 
   } else {
-    /* Orbiting observatory */
+
+      /* Orbiting observatory */
     double pole, rapole, phase;
     int i;
     SPACECRAFT *s;
+    if (obscode>2000) {
+        FILE *sitefile ;
+        char inbuff[BUFFSIZE];
+        char filename[FNAMESIZE];
+        double jd0;
+        if (obscode == 2001) {
+            strncpy(filename,"os393.hst",FNAMESIZE-1);
+        } else {
+            strncpy(filename,"pn70.hst",FNAMESIZE-1);
+        }
+        sitefile = fopen(filename,"r");
+        while (fgets_nocomment(inbuff, BUFFSIZE-1, sitefile, NULL)!=NULL) {
+            sscanf(inbuff, "%lf %lf %lf %lf", &jd0, xobs, yobs, zobs);
+            if (jd0 + 5./60./24.0> jd) {
+                *xobs /= R1.AU;
+                *yobs /= R1.AU;
+                *zobs /= R1.AU;
+                fclose(sitefile);
+                return;
+            }
+        }
+        fclose(sitefile);
+    }
+
     for (i=0; obscode!=spacecraftlist[i].code && i<nspacecraft; i++)  ;
     if (i>=nspacecraft) {
       fprintf(stderr,"Unknown spacecraft code %d\n",obscode);
@@ -780,7 +806,7 @@ observatory_geocenter(double jd,
     *zobs = s->a * sin(phase)*sin(pole);
     /*fprintf(stderr,"Obs. Posn at jd %.5f : phase %.1f rapole %.1f pole %.1f \n",
       jd, phase/DTOR, rapole/DTOR, pole/DTOR);*/
-  /*fprintf(stderr," x,y,z: %g %g %g\n", *xobs, *yobs, *zobs);*/
+    fprintf(stderr," x,y,z: %g %g %g\n", *xobs, *yobs, *zobs);
   }
 
   return;
