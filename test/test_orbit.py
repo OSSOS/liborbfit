@@ -56,7 +56,7 @@ class OrbitFit(unittest.TestCase):
 
         observations = []
         for line in mpc_lines:
-            observations.append(mp_ephem.Observation.from_string(line))
+            observations.append(mp_ephem.ObsRecord.from_string(line))
 
         this_orbit = mp_ephem.BKOrbit(observations=observations)
 
@@ -74,7 +74,7 @@ class OrbitFit(unittest.TestCase):
 
         observations = []
         for line in mpc_lines:
-            observations.append(mp_ephem.Observation.from_string(line))
+            observations.append(mp_ephem.ObsRecord.from_string(line))
 
         this_orbit = mp_ephem.BKOrbit(observations)
         self.assertAlmostEqual(this_orbit.a.to(units.au).value, 137.91, 1)
