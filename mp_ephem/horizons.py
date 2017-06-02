@@ -492,14 +492,7 @@ class Body(object):
         dec = scipy.interp(self.current_time.jd,
                            self.ephemeris['Time'].jd,
                            self.ephemeris['DEC_(ICRF/J2000.0)']) * units.degree
-        try:
-            distance = scipy.interp(self.current_time.jd,
-                                   self.ephemeris['Time'].jd,
-                                   self.ephemeris['Helio range & rng rate']) * units.au
-        except:
-            distance = scipy.interp(self.current_time.jd,
-                                   self.ephemeris['Time'].jd,
-                                   self.ephemeris['r']) * units.au
+        distance = 40 * units.au
         return SkyCoord(ra, dec, distance=distance)
 
     @property
