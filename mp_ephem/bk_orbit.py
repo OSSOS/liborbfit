@@ -434,7 +434,8 @@ class BKOrbit(object):
         """
 
         if minimum_delta is None:
-            minimum_delta = 0.00001 * units.day
+            # Set the minimum delta to very small value so that we always compute new positions
+            minimum_delta = 0.00001 * units.second
 
         if not isinstance(date, Time):
             if isinstance(date, float):
