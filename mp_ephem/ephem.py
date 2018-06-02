@@ -304,9 +304,7 @@ class MPCNote(object):
                                           "must be 0 or 1 characters",
                                           _code)
             if _code not in MPCNOTES[self.note_type]:
-                raise MPCFieldFormatError(self.note_type,
-                                          "must one of " + str(MPCNOTES[self.note_type]),
-                                          _code)
+                logging.warning("Unknown note value: {}".format(_code))
         self._code = _code
 
     def __str__(self):
@@ -618,9 +616,13 @@ class ObsRecord(object):
         if isinstance(obsrec.comment, OSSOSComment) and obsrec.comment.source_name is None:
             obsrec.comment.source_name = obsrec.provisional_name
         # Check if there are TNOdb style flag lines.
-        if isinstance(obsrec.comment, TNOdbComment):
-            if obsrec.comment.flags[0] == '1':
-                obsrec.discovery.is_discovery = True
+        if hasattr(obsrec.comment, 'flags') and obsrec.comment.flags is not None:
+            try:
+                if obsrec.comment.flags[0] == '1':
+                    obsrec.discovery.is_discovery = True
+            except Exception as ex:
+                logging.warning(str(ex))
+                logging.warning("Invalid flag string in comment: {}".format(obsrec.comment.flags))
 
         return obsrec
 
@@ -831,23 +833,37 @@ class ObsRecord(object):
 
         self._ra_precision = 3
         self._dec_precision = 2
+
+        # First try using just the values as provided, maybe they have units
+        try:
+            self._coordinate = SkyCoord(val1, val2)
+            return
+        except:
+            pass
+
+        # Now try treating them as floats in degrees.
         try:
             ra = float(val1)
             dec = float(val2)
             self._coordinate = SkyCoord(ra, dec, unit=(units.degree, units.degree))
+            return
         except:
-            try:
-                self._ra_precision = compute_precision(val1)
-                self._ra_precision = self._ra_precision < 3 and self._ra_precision or 3
-                self._dec_precision = compute_precision(val2)
-                self._dec_precision = self._dec_precision < 2 and self._dec_precision or 2
-                self._coordinate = SkyCoord(val1, val2, unit=(units.hour, units.degree))
-            except Exception as ex:
-                logging.debug(type(ex))
-                logging.debug(str(ex))
-                raise MPCFieldFormatError("coord_pair",
-                                          "must be [ra_deg, dec_deg] or HH MM SS.S[+-]dd mm ss.ss",
-                                          coord_pair)
+            pass
+
+        # Maybe they are strings and then assume HH:MM:SS dd:mm:ss
+        try:
+            self._ra_precision = compute_precision(val1)
+            self._ra_precision = self._ra_precision < 3 and self._ra_precision or 3
+            self._dec_precision = compute_precision(val2)
+            self._dec_precision = self._dec_precision < 2 and self._dec_precision or 2
+            self._coordinate = SkyCoord(val1, val2, unit=(units.hour, units.degree))
+            return
+        except Exception as ex:
+            logging.debug(type(ex))
+            logging.debug(str(ex))
+            raise MPCFieldFormatError("coord_pair",
+                                      "must be [ra_deg, dec_deg] or HH MM SS.S[+-]dd mm ss.ss",
+                                      coord_pair)
 
     @property
     def mag(self):
@@ -902,6 +918,42 @@ class ObsRecord(object):
 Observation = ObsRecord
 
 
+class MPCComment(object):
+    """
+    A generic class for all comment strings.. try and figure out which one to use.
+    """
+
+    def __init__(self, comment):
+        self.comment = str(comment)
+
+    def __str__(self):
+        return str(self.comment)
+
+    @classmethod
+    def from_string(cls, line):
+        comment = line
+        logging.debug('Here is the comment. ' + comment)
+        for func in [TNOdbComment.from_string,
+                     OSSOSComment.from_string,
+                     RealOSSOSComment.from_string,
+                     CFEPSComment.from_string,
+                     MPCComment]:
+            try:
+                comment = func(line)
+            except ValueError as verr:
+                logging.debug(str(func))
+                logging.debug(str(verr))
+                continue
+            break
+        return comment
+
+    def to_string(self):
+        as_string = str(self)
+        if self.comment is not None and str(self.comment) != "":
+            as_string += " " + str(self.comment)
+        return as_string
+
+
 class OSSOSComment(object):
     """
     Parses an OSSOS observation's metadata into a format that can be stored in the 
@@ -916,7 +968,6 @@ class OSSOSComment(object):
                  magnitude=None,
                  mag_uncertainty=None,
                  comment=None):
-
         self.version = version
         self._frame = None
         self.frame = frame
@@ -933,9 +984,14 @@ class OSSOSComment(object):
         self._mag_uncertainty = None
         self.mag_uncertainty = mag_uncertainty
         self._plate_uncertainty = None
-        self.plate_uncertainty = plate_uncertainty
         self._astrometric_level = 0
-        self.astrometric_level = astrometric_level
+        try:
+            self.plate_uncertainty = plate_uncertainty
+            self.astrometric_level = astrometric_level
+        except:
+            self.plate_uncertainty = 0.2
+            self.mag = plate_uncertainty
+            self.mag_uncertainty = astrometric_level
         self._comment = ""
         self.comment = comment
         self.flags = None
@@ -970,7 +1026,10 @@ class OSSOSComment(object):
         ossos_comment_format = '1s1x12s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
         old_ossos_comment_format = '1s1x10s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
         bad_ossos_comment_format = '1s3x10s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
-        for struct_ in [ossos_comment_format, old_ossos_comment_format, bad_ossos_comment_format]:
+        orig_ossos_comment_format = '1s1x10s1x8s1x1s1s1x6s1x6s1x5s1x4s1x4s1x'
+
+        for struct_ in [ossos_comment_format, old_ossos_comment_format, bad_ossos_comment_format,
+                        orig_ossos_comment_format]:
             try:
                 logging.debug("Parsing using structure: {}".format(struct_))
                 retval = cls(*struct.unpack(struct_, values[0]))
@@ -982,6 +1041,7 @@ class OSSOSComment(object):
 
         logging.debug("Trying space separated version")
         values = values[0].split()
+        # O 1645236p27 L3UV Y 106.35 4301.85 0.20 0 24.31 0.15
         try:
             if values[0] != 'O' or len(values) < 6:
                 # this is NOT and OSSOS style comment string
@@ -994,6 +1054,10 @@ class OSSOSComment(object):
                          mpc_note=values[3][1:].strip(),
                          x=values[4].strip(),
                          y=values[5].strip(),
+                         plate_uncertainty=len(values) > 6 and float(values[6]) or None,
+                         astrometric_level=len(values) > 7 and int(values[7]) or None,
+                         magnitude=len(values) > 8 and float(values[8]) or None,
+                         mag_uncertainty=len(values) > 9 and float(values[9]) or None,
                          comment=comment_string.strip())
         except Exception as e:
             logging.debug(values)
@@ -1014,12 +1078,13 @@ class OSSOSComment(object):
             retval.mag = values[6]
             retval.mag_uncertainty = values[7]
             retval.plate_uncertainty = values[8]
-        elif len(values) == 10:  # if there are 9 values then the new astrometric level value is set.
-            retval.plate_uncertainty = values[8]
-            retval.astrometric_level = values[9]
-            logging.debug('here now')
-            retval.mag = values[6]
-            retval.mag_uncertainty = values[7]
+        elif len(values) == 10:
+            if float(values[8]) < 1 :  # if there are 9 values then the new astrometric level value is set after mag
+                retval.plate_uncertainty = values[8]
+                retval.astrometric_level = values[9]
+                logging.debug('here now')
+                retval.mag = values[6]
+                retval.mag_uncertainty = values[7]
         logging.debug("DONE.")
         return retval
 
@@ -1078,7 +1143,10 @@ class OSSOSComment(object):
 
     @astrometric_level.setter
     def astrometric_level(self, astrometric_level):
-        astrometric_level = int(astrometric_level)
+        try:
+            astrometric_level = int(astrometric_level)
+        except:
+            astrometric_level = 0
         if not -1 < astrometric_level < 10:
             raise ValueError("Astrometric level must be integer between 0 and 9.")
         self._astrometric_level = astrometric_level
@@ -1119,8 +1187,8 @@ class OSSOSComment(object):
             self._plate_uncertainty = float(plate_uncertainty)
         except:
             self._plate_uncertainty = 0.2
-        if not 0 < self._plate_uncertainty < 100:
-            raise ValueError("Plate uncertainty must be between 0 and 100. (in arc-seconds)")
+        if not 0 < self._plate_uncertainty < 1.:
+            raise ValueError("Plate uncertainty must be between 0 and 1. (in arc-seconds)")
 
     @property
     def comment(self):
@@ -1148,9 +1216,7 @@ class OSSOSComment(object):
     def __str__(self):
         """
         Format comment as required for storing OSSOS metadata
-        odonum p ccd object_name MPCnotes X Y mag mag_uncertainty plate_uncertainty % comment
         """
-        # The astrometric uncertainty should be set to higher when hand measurements are made.
         if self.version == "T":
             return self.comment
 
@@ -1521,8 +1587,7 @@ class CFEPSComment(OSSOSComment):
             y = ""
         source_name = None
         mpc_note = " "
-        super(CFEPSComment, self).__init__("O", frame, source_name, " ", mpc_note, x, y, comment=comment)
-        self.version = "L"
+        super(CFEPSComment, self).__init__("L", frame, source_name, " ", mpc_note, x, y, comment=comment)
 
     @classmethod
     def from_string(cls, comment):
@@ -1537,7 +1602,7 @@ class CFEPSComment(OSSOSComment):
         return cls(frame, comment)
 
 
-class TNOdbComment(OSSOSComment):
+class TNOdbComment(object):
     """
     This holds a TNOdb style comment line which contains flags.
 
@@ -1547,7 +1612,7 @@ class TNOdbComment(OSSOSComment):
 
     def __init__(self, index, date, flags, **kwargs):
 
-        super(TNOdbComment, self).__init__(**kwargs)
+        self.comment_object = None
         self.index = index
         self.date = date
         self.flags = flags
@@ -1563,56 +1628,24 @@ class TNOdbComment(OSSOSComment):
         date = line[15:23].strip()
         flags = line[24:34].strip()
         comment = line[56:].strip()
+        this = cls(index, date, flags)
         logging.debug("Got TNOdb parts: date: {} flags: {} comment: {}".format(date, flags, comment))
         comment_object = None
         # try build a comment object based on the TNOdb comment string
         if len(comment) > 0:
             for func in [OSSOSComment.from_string,
-                         CFEPSComment.from_string]:
+                         CFEPSComment.from_string,
+                         MPCComment.from_string]:
                 try:
                     comment_object = func(comment)
                 except ValueError as verr:
                     logging.debug(verr)
                     continue
                 break
-
-        if isinstance(comment_object, OSSOSComment):
-            retval = cls(index,
-                         date,
-                         flags,
-                         version=comment_object.version,
-                         frame=comment_object.frame,
-                         source_name=comment_object.source_name,
-                         mpc_note=comment_object.mpc_note,
-                         x=comment_object.x,
-                         y=comment_object.y,
-                         magnitude=comment_object.mag,
-                         mag_uncertainty=comment_object.mag_uncertainty,
-                         photometry_note=comment_object.photometry_note,
-                         plate_uncertainty=comment_object.plate_uncertainty,
-                         astrometric_level=comment_object.astrometric_level,
-                         comment=comment_object.comment)
-            return retval
-        else:
-            retval = cls(index,
-                         date,
-                         flags,
-                         version="T",
-                         frame=" ",
-                         source_name="",
-                         photometry_note=" ",
-                         mpc_note=" ",
-                         x=" ",
-                         y=" ",
-                         comment=comment)
-            return retval
-
-    def to_string(self):
-        comm = "{} {} {}".format(self.index, self.date, self.flags)
-        # add 22 spaces that are currently padding in TNOdb style records.
-        comm += " " * 22
-        comm += str(self)
-        return comm
+        comment_object.date = date
+        comment_object.flags = flags
+        comment_object.index = index
+        return comment_object
 
 
 class RealOSSOSComment(OSSOSComment):
@@ -1622,26 +1655,3 @@ class RealOSSOSComment(OSSOSComment):
             comment = "O " + comment
         return super(RealOSSOSComment, cls).from_string(comment)
 
-
-class MPCComment(OSSOSComment):
-    """
-    A generic class for all comment strings.. try and figure out which one to use.
-    """
-
-    @classmethod
-    def from_string(cls, line):
-        comment = line
-        logging.debug('Here is the comment. ' + comment)
-        for func in [TNOdbComment.from_string,
-                     OSSOSComment.from_string,
-                     RealOSSOSComment.from_string,
-                     CFEPSComment.from_string,
-                     str]:
-            try:
-                comment = func(line)
-            except ValueError as verr:
-                logging.debug(str(func))
-                logging.debug(str(verr))
-                continue
-            break
-        return comment
