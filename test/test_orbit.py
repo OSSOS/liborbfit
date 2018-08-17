@@ -6,7 +6,7 @@ import os
 
 class OrbitFit(unittest.TestCase):
 
-    def setUp(self):
+    def _setUp(self):
         mpc_filename = 'data/o3o08.mpc'
         self.abg_filename = 'data/o3o08.abg'
         self.observations = mp_ephem.EphemerisReader().read(mpc_filename)
@@ -47,6 +47,21 @@ class OrbitFit(unittest.TestCase):
             self.assertEqual(getattr(orbit1, attr),
                              getattr(orbit2, attr))
 
+    def test_OSSOSParser(self):
+        mpc_line = " O13BL3UV     C2013 08 02.50855 01 00 04.549+04 59 01.53         24.3 r      568 O 1645236p27 L3UV Y 106.35 4301.85 0.20 0 24.31 0.15 % hurrah!"
+        obs = mp_ephem.Observation.from_string(mpc_line)
+        print(type(obs.comment))
+        self.assertIsInstance(obs.comment, mp_ephem.OSSOSComment)
+        mpc_line = "     K01QX1F 1C2000 08 26.21908 23 10 50.37 -05 45 16.1          22.6 R      807 19000101_500_1 20170607 0000000000                       link o3l06PD = 2001 QF331 = K01QX1F"
+        obs = mp_ephem.Observation.from_string(mpc_line)
+        self.assertIsInstance(obs.comment, mp_ephem.MPCComment)
+        mpc_line = " O13BL3SX     C2013 09 29.42805 00 46 59.117+02 09 12.81         24.1 r      568 20130929_568_1 20180216 1000000000                      O   1656905p14 L3SX        Y  1873.54 4214.87 0.11 2 24.07 0.14 %"
+        mpc_line = " O13BL3SX    EC2013 12 05.23284 00 42 51.561+01 44 04.10                     568 20130802_568_1 20140817 0000000000                      O 1672595p13 O13BL3SX ZE  170.4 4611.6            UUUU % just visible"
+        obs = mp_ephem.Observation.from_string(mpc_line)
+        self.assertIsInstance(obs.comment, mp_ephem.OSSOSComment)
+        mpc_line = " O13BL3SX     C2014 06 25.58497 00 55 37.028+03 03 50.66         23.6 r      568 20140102_568_1 20140817 0000000000                      O 1722362p11 O13BL3SX Y  1905.8 1009.5 23.57 0.10 UUUU % "
+        obs = mp_ephem.Observation.from_string(mpc_line)
+        self.assertIsInstance(obs.comment, mp_ephem.OSSOSComment)
 
     def test_orbfit_residuals(self):
         mpc_lines = ("     HL7j2    C2013 04 03.62926 17 12 01.16 +04 13 33.3          24.1 R      568",
@@ -78,3 +93,8 @@ class OrbitFit(unittest.TestCase):
 
         this_orbit = mp_ephem.BKOrbit(observations)
         self.assertAlmostEqual(this_orbit.a.to(units.au).value, 137.91, 1)
+
+    def test_tnodb_discovery_flags(self):
+        orbit = mp_ephem.BKOrbit(None, ast_filename='data/o4h29.ast')
+        for observation in orbit.observations:
+            self.assertTrue(observation.discovery)
