@@ -1,6 +1,7 @@
 """
 send queries to the Horizons batch query system via a web UI.  Derived from code supplied by
 Wes Fraser and Michele Bannister with more smarty pants stuff added by JJ Kavelaars.
+            irint self.datadd
 """
 import copy
 import re
@@ -21,13 +22,13 @@ class Query(object):
     """
 
     SERVER = 'ssd.jpl.nasa.gov'
-    PROTOCOL = 'http'
+    PROTOCOL = 'https'
     END_POINT = 'horizons_batch.cgi'
 
     horizons_quantities = [0, 'Astrometric RA & DEC', 'Apparent RA & DEC',
                            'Rates; RA & DEC', 'Apparent AZ & EL', 'Rates; AZ & EL',
                            'Sat. X & Y, pos. ang', 'Local app. sid. time',
-                           'Airmass', 'Vis mag. & Surf Brt', 'Illuminated fraction',
+                           'Airmass', 'APmag', 'Illuminated fraction',
                            'Defect of illumin.', 'Sat. angle separ/vis',
                            'Target angular diam.', 'Obs sub-lng & sub-lat',
                            'Sun sub-long & sub-lat', 'Sub Sun Pos. Ang & Dis',
@@ -44,7 +45,7 @@ class Query(object):
                            'True anomaly angle', 'Local app. hour angle']
 
     default_quantities = ['Astrometric RA & DEC', 'Rates; RA & DEC',
-                          'RA & DEC uncertainty', 'Vis mag. & Surf Brt',
+                          'RA & DEC uncertainty', 'APmag',
                           'POS error ellipse', 'Helio range & rng rate']
 
     default_horizons_params = {'batch': "'{}'".format(1),
@@ -82,7 +83,7 @@ class Query(object):
         self._start_time = start_time
         self._stop_time = stop_time
         self._step_size = step_size
-        self._center = 568
+        self._center = "568"
         self._nobs = None
         self._arc_length = None
         self._current_time = None
@@ -112,11 +113,14 @@ class Query(object):
 
         @return: str
         """
-        return "'{}@399'".format(self._center)
+        return self._center
 
     @center.setter
     def center(self, center):
-        self._center = center
+        if "@" in center:
+		self._center = center
+	else:
+		self._center = "{}@399".format(center)
 
     @property
     def command(self):
@@ -486,6 +490,7 @@ class Body(object):
 
         @rtype: SkyCoord
         """
+
         ra = scipy.interp(self.current_time.jd,
                           self.ephemeris['Time'].jd,
                           self.ephemeris['R.A._(ICRF/J2000.0)']) * units.degree
@@ -536,6 +541,15 @@ class Body(object):
                            self.ephemeris['RA_3sigma']) * units.arcsec
 
         return dra
+    
+    @property
+    def mag(self):
+	"""
+        Visual magnitude of the source.
+        """
+        return scipy.interp(self.current_time.jd,
+                            self.ephemeris['Time'].jd,
+                            self.ephemeris['APmag'])
 
     @property
     def ddec(self):
