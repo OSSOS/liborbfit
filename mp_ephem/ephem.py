@@ -1371,18 +1371,17 @@ def make_tnodb_header(observations,
     if len(observers) > 1:
         header += " and {}".format(observers[-1])
     header += "\n"
-    header += "MEA "
-    sep = ""
-    for measurer in measurers[:-1]:
-        header += "{}{}".format(sep, measurer)
-        sep = ", "
-    if len(measurers) > 1:
-        header += " and {}".format(measurers[-1])
-    header += "\n"
+    if measurers is not None and len(measurers) > 0:
+        header += "MEA {}".format(measurers[0])
+        for measurer in measurers[1:-1]:
+            header += ", {}".format(measurer)
+        if len(measurers) > 1:
+            header += " and {}".format(measurers[-1])
+        header += "\n"
     header += "TEL {}\n".format(telescope)
     header += "NET {}\n".format(astrometric_network)
-    header += "{:s} {:s}\n".format('STD', mindate)
-    header += "{:s} {:s}\n".format('END', maxdate)
+    header += mindate is not None and "{:s} {:s}\n".format('STD', mindate) or ""
+    header += maxdate is not None and "{:s} {:s}\n".format('END', maxdate) or ""
 
     return header
 
@@ -1491,7 +1490,8 @@ class Index(object):
     def __init__(self, idx_filename):
         self.names = {}
         self.index = {}
-        with open(idx_filename, 'r') as idx_handle:
+        if os.access(idx_filename, os.F_OK):
+          with open(idx_filename, 'r') as idx_handle:
             for line in idx_handle.readlines():
                 master_name = line[0:Index.MAX_NAME_LENGTH]
                 master_name = master_name.strip()
