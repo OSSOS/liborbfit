@@ -91,7 +91,11 @@ class BKOrbit(object):
                     self._r_mag = mag + offsets[band]
                     break
         return self._r_mag
-
+    
+    @property
+    def mag(self):
+	return self.r_mag
+ 
     def _fit_radec(self):
 
 
