@@ -179,7 +179,6 @@ class Query(object):
                 idx = int(quantity)
             except:
                 idx = Query.horizons_quantities.index(quantity)
-            print quantity ,idx
             if idx is not None and idx not in self._quantities:
                 self._quantities.append(idx)
 
@@ -558,7 +557,6 @@ class Body(object):
         """
         Phase angle.
         """
-        print self.ephemeris
         return scipy.interp(self.current_time.jd,
                             self.ephemeris['Time'].jd,
                             self.ephemeris['phi']) * units.degree
