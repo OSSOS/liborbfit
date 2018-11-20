@@ -42,11 +42,12 @@ class Query(object):
                            'North pole RA & DEC', 'Galactic latitude', 'Local app. SOLAR time',
                            'Earth->Site lt-time', 'RA & DEC uncertainty', 'POS error ellipse',
                            'POS uncertainty (RSS)', 'Range & Rng-rate sig.', 'Doppler/delay sigmas',
-                           'True anomaly angle', 'Local app. hour angle']
+                           'True anomaly angle', 'Local app. hour angle', 'PHASE angle & bisector']
 
     default_quantities = ['Astrometric RA & DEC', 'Rates; RA & DEC',
                           'RA & DEC uncertainty', 'APmag',
-                          'POS error ellipse', 'Helio range & rng rate']
+                          'POS error ellipse', 'Helio range & rng rate', 
+                          'PHASE angle & bisector']
 
     default_horizons_params = {'batch': "'{}'".format(1),
                                'COMMAND': "'{}'".format('Ceres'),
@@ -117,7 +118,7 @@ class Query(object):
 
     @center.setter
     def center(self, center):
-        if "@" in center:
+        if "@" in str(center):
 		self._center = center
 	else:
 		self._center = "{}@399".format(center)
@@ -178,6 +179,7 @@ class Query(object):
                 idx = int(quantity)
             except:
                 idx = Query.horizons_quantities.index(quantity)
+            print quantity ,idx
             if idx is not None and idx not in self._quantities:
                 self._quantities.append(idx)
 
@@ -550,6 +552,16 @@ class Body(object):
         return scipy.interp(self.current_time.jd,
                             self.ephemeris['Time'].jd,
                             self.ephemeris['APmag'])
+
+    @property
+    def alpha(self):
+        """
+        Phase angle.
+        """
+        print self.ephemeris
+        return scipy.interp(self.current_time.jd,
+                            self.ephemeris['Time'].jd,
+                            self.ephemeris['phi']) * units.degree
 
     @property
     def ddec(self):
