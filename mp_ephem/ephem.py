@@ -1363,18 +1363,17 @@ def make_tnodb_header(observations,
 
     header = "COD {}\n".format(observatory_code)
 
-    sep = ""
-    header += "OBS "
-    for observer in observers[:-1]:
-        header += "{}{}".format(sep, observer)
-        sep = ", "
-    if len(observers) > 1:
-        header += " and {}".format(observers[-1])
-    header += "\n"
-    if measurers is not None and len(measurers) > 0:
+    if observers is not None:
+        header += "OBS {}".format(observers[0])
+        if len(observers) > 2:
+	   header += ", {}".format(", ".join(observers[1:-1]))
+        if len(observers) > 1:
+           header += " and {}".format(observers[-1])
+        header += "\n"
+    if measurers is not None:
         header += "MEA {}".format(measurers[0])
-        for measurer in measurers[1:-1]:
-            header += ", {}".format(measurer)
+        if len(measurers) > 2:
+            header += ", {}".format(", ".join(measurers[1:-1]))
         if len(measurers) > 1:
             header += " and {}".format(measurers[-1])
         header += "\n"
