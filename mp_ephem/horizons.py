@@ -14,6 +14,7 @@ from astropy.time import Time
 from astropy import units
 from astropy.units.quantity import Quantity
 from astropy.io.ascii import Csv
+from astropy.table import Table
 
 
 class Query(object):
@@ -46,7 +47,7 @@ class Query(object):
 
     default_quantities = ['Astrometric RA & DEC', 'Rates; RA & DEC',
                           'RA & DEC uncertainty', 'APmag',
-                          'POS error ellipse', 'Helio range & rng rate', 
+                          'POS error ellipse', 'Helio range & rng rate', 'Obsrv range & rng rate',
                           'PHASE angle & bisector']
 
     default_horizons_params = {'batch': "'{}'".format(1),
@@ -119,9 +120,9 @@ class Query(object):
     @center.setter
     def center(self, center):
         if "@" in str(center):
-		self._center = center
-	else:
-		self._center = "{}@399".format(center)
+            self._center = center
+        else:
+            self._center = "{}@399".format(center)
 
     @property
     def command(self):
@@ -317,6 +318,13 @@ class Body(object):
         self._nobs = None
         self._arc_length = None
         self._data = None
+
+    def __call__(self, keyword, **kwargs):
+        if keyword not in self.ephemeris.colnames:
+            raise KeyError("Requested column {} does not in: {}".format(keyword, self.ephemeris.colnames))
+        return scipy.interp(self.current_time.jd,
+                            self.ephemeris['Time'].jd,
+                            self.ephemeris[keyword])
 
     @property
     def start_time(self):
@@ -542,10 +550,10 @@ class Body(object):
                            self.ephemeris['RA_3sigma']) * units.arcsec
 
         return dra
-    
+
     @property
     def mag(self):
-	"""
+        """
         Visual magnitude of the source.
         """
         return scipy.interp(self.current_time.jd,
@@ -662,4 +670,16 @@ class Body(object):
         """
         return self.elements['N'] * units.degree / units.day
 
+    @property
+    def delta(self):
+        """
+        Distance from Observer to Target
+        :return:
+        """
+        return scipy.interp(self.current_time.jd,
+                            self.ephemeris['Time'].jd,
+                            self.ephemeris['delta']) * units.au
+
+
 Ephmeris = Body
+
