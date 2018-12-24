@@ -88,7 +88,7 @@ MPCNOTES = {"Note1": {" ": " ",
 
 
 class MinorPlanetNumber(object):
-    PACKED_DESIGNATION = " ABCDEFGHJKLMNOPQRSTUVWXYZ"
+    PACKED_DESIGNATION = " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
     def __init__(self, minor_planet_number):
         self._minor_planet_number = None
