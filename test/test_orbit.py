@@ -62,6 +62,9 @@ class OrbitFit(unittest.TestCase):
         mpc_line = " O13BL3SX     C2014 06 25.58497 00 55 37.028+03 03 50.66         23.6 r      568 20140102_568_1 20140817 0000000000                      O 1722362p11 O13BL3SX Y  1905.8 1009.5 23.57 0.10 UUUU % "
         obs = mp_ephem.Observation.from_string(mpc_line)
         self.assertIsInstance(obs.comment, mp_ephem.OSSOSComment)
+        mpc_line = "q3615K06UW1O HC2018 09 12.62432 01 13 26.144+05 53 05.74               q~2kJo568"
+        obs = mp_ephem.Observation.from_string(mpc_line)
+        self.assertIsInstance(obs.comment, mp_ephem.OSSOSComment)
 
     def test_orbfit_residuals(self):
         mpc_lines = ("     HL7j2    C2013 04 03.62926 17 12 01.16 +04 13 33.3          24.1 R      568",
