@@ -48,7 +48,7 @@ class Query(object):
     default_quantities = ['Astrometric RA & DEC', 'Rates; RA & DEC',
                           'RA & DEC uncertainty', 'APmag',
                           'POS error ellipse', 'Helio range & rng rate', 'Obsrv range & rng rate',
-                          'PHASE angle & bisector']
+                          'PHASE angle & bisector', 'Sun-Obs-Targ ELONG ang']
 
     default_horizons_params = {'batch': "'{}'".format(1),
                                'COMMAND': "'{}'".format('Ceres'),
@@ -325,6 +325,18 @@ class Body(object):
         return scipy.interp(self.current_time.jd,
                             self.ephemeris['Time'].jd,
                             self.ephemeris[keyword])
+
+    @property
+    def elongation(self):
+        """
+        Sun-Observer-Target Elongation
+        S-O-T /r
+        :return:
+        """
+        return scipy.interp(self.current_time.jd,
+                            self.ephemeris['Time'].jd,
+                            self.ephemeris['S-O-T']) * units.degree
+
 
     @property
     def start_time(self):
