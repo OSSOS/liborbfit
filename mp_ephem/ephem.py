@@ -609,7 +609,7 @@ class ObsRecord(object):
 
         if obsrec is None or not obsrec:
             if mpc_line is not None and len(mpc_line) > 0:
-                logging.error("Failed to parse line: {}".format(mpc_line))
+                logging.warning("Failed to parse line: {}".format(mpc_line))
             return obsrec
 
         obsrec.comment = MPCComment.from_string(comment)
@@ -779,7 +779,7 @@ class ObsRecord(object):
         try:
             self._date = Time(date_str, format='mpc', scale='utc', precision=self._date_precision)
         except Exception as ex:
-            logging.error(str(ex))
+            logging.warning(str(ex))
             raise MPCFieldFormatError("ObsRecord Date",
                                       "does not match expected format",
                                       date_str)
