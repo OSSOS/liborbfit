@@ -30,7 +30,13 @@ double *fitradec(char *mpc_filename, char *abg_filename)
     fprintf(stderr, "Error reading input observations\n");
     return result ;
   }
-  
+
+   /*
+  for (i=0;i<nobs;i++) {
+    fprintf(stderr, "%lf %d %lf %lf %lf\n", obsarray[i].obstime, obsarray[i].obscode,
+            obsarray[i].xe, obsarray[i].ye, obsarray[i].ze);
+  }
+  */
   /* Call subroutine to do the actual fitting: */
   fit_observations(obsarray, nobs, &p, covar, &chisq, &dof, NULL);
 

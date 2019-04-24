@@ -1,15 +1,12 @@
 #include <math.h>
-
+#include "nrutil.h"
 #define TINY 1.0e-20;
 
-void ludcmp(a,n,indx,d)
-int n,*indx;
-double **a,*d;
+void ludcmp(double **a, int n, int *indx, double *d)
 {
 	int i,imax,j,k;
 	double big,dum,sum,temp;
-	double *vv,*dvector();
-	void nrerror(),free_dvector();
+	double *vv;
 
 	vv=dvector(1,n);
 	*d=1.0;

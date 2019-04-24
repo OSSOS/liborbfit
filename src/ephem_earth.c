@@ -714,6 +714,28 @@ earth_ssbary(double jd,
   return;
 }
 
+/* convert x/y/z geo location to ssbary x/y/z */
+void geo_to_ssbary(double jd, double *x, double *y, double *z)
+{
+  double xgeo[3];
+
+  /* determine where the geocenter is */
+  geocenter_ssbary(jd, xgeo);
+  /* fprintf(stderr, "XGEO: %lf %lf %lf\n", xgeo[0], xgeo[1], xgeo[2]);
+   fprintf(stderr, "OBS: %lf %lf %lf (km)\n", *x, *y, *z); */
+  *x /= R1.AU;
+  *y /= R1.AU;
+  *z /= R1.AU;
+  /* fprintf(stderr, "OBS: %lf %lf %lf (au)\n", *x, *y, *z); */
+  /* Add in to give observatory coords in ICRS */
+  *x = xgeo[0] + *x/R1.AU;
+  *y = xgeo[1] + *y/R1.AU;
+  *z = xgeo[2] + *z/R1.AU;
+  /* fprintf(stderr, "PRO: %lf %lf %lf\n", *x, *y, *z); */
+  return ;
+}
+
+
 /* return vector from geocenter->observatory in ICRS coordinates*/
 void
 observatory_geocenter(double jd,
@@ -806,7 +828,7 @@ observatory_geocenter(double jd,
     *zobs = s->a * sin(phase)*sin(pole);
     /*fprintf(stderr,"Obs. Posn at jd %.5f : phase %.1f rapole %.1f pole %.1f \n",
       jd, phase/DTOR, rapole/DTOR, pole/DTOR);*/
-    fprintf(stderr," x,y,z: %g %g %g\n", *xobs, *yobs, *zobs);
+    /* fprintf(stderr," x,y,z: %g %g %g\n", *xobs, *yobs, *zobs); */
   }
 
   return;

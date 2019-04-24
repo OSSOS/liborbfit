@@ -26,7 +26,7 @@ double	jd0;		/* Zeropoint of time scale */
 double mpc_dtheta=DEFAULT_DTHETA;	/*default astrometric error*/
 
 int invert_matrix(double **, double **, int);
-
+void geo_to_ssbary(double , double *, double *, double *);
 void
 set_mpc_dtheta(double d) {
   mpc_dtheta = d;
@@ -165,11 +165,10 @@ fgets_nocomment(char *inbuff, int length,
  * part of OBSERVATION structure, ra & dec in the x & y parts.  Format
  * error returns non-zero.
  */
-int
-scan_observation(char *inbuff,
-		 OBSERVATION *obs)
+int scan_observation(char *inbuff, OBSERVATION *obs, OBSERVATION *previous)
 {
   char rastring[80],decstring[80],*endptr;
+  char two_line_flag[80]; // if set then this is the 2nd line of a two line MPC entry
   double jd;
   extern double dmsdeg(char *string);
   extern double hmsdeg(char *string);
@@ -185,29 +184,49 @@ scan_observation(char *inbuff,
     }
     dd.h = dd.mn = dd.s = 0.;
     jd = date_to_jd(dd);
+    sscanf(inbuff+32,"%s", two_line_flag);
+
+    if (strncmp(two_line_flag, "1\0", 2)==0) {
+      // this is the 2nd line which will contain the x/y/z location of the observations
+      sscanf(inbuff+32,"%s - %lf - %lf - %lf", two_line_flag, &(previous->xe), &(previous->ye), &(previous->ze));
+      return(-1);
+    }
     strncpy(rastring,inbuff+32,11);
     strncpy(decstring,inbuff+44,11);
     sscanf(inbuff+77,"%3d",&(obs->obscode));
     obs->dthetay = mpc_dtheta;
     
   } else if (jd<10000.) {
-    /* See if perhaps this was y/m/d instead of JD: */
-    struct date_time dd;
-    if (sscanf(inbuff,"%d %d %f %s %s %lf %d",
-	       &(dd.y),&(dd.mo),&(dd.d),rastring,decstring,
-	       &(obs->dthetay),
-	       &(obs->obscode)) !=7 ) {
-      fprintf(stderr,"Format error in observation file:\n ->%s\n",inbuff);
-      return(1);
-    }
-    dd.h = dd.mn = dd.s = 0.;
-    jd = date_to_jd(dd);
-  } else if (sscanf(inbuff,"%lf %s %s %lf %d",
-		    &jd,rastring,decstring,
-		    &(obs->dthetay),
-		    &(obs->obscode)) !=5 ) {
-    fprintf(stderr,"Format error in observation file:\n ->%s\n",inbuff);
-    return(1);
+      /* See if perhaps this was y/m/d instead of JD: */
+      struct date_time dd;
+      if (sscanf(inbuff, "%d %d %f %s %s %lf %d",
+                 &(dd.y), &(dd.mo), &(dd.d), rastring, decstring,
+                 &(obs->dthetay),
+                 &(obs->obscode)) != 7) {
+          fprintf(stderr, "Format error in observation file:\n ->%s\n", inbuff);
+          return (1);
+      }
+      dd.h = dd.mn = dd.s = 0.;
+      jd = date_to_jd(dd);
+  } else {
+      if (sscanf(inbuff, "%lf %s %s %lf %lf %lf %lf",
+                 &jd, rastring, decstring, &(obs->dthetay), &(obs->xe), &(obs->ye), &(obs->ze)) != 7) {
+          if (sscanf(inbuff, "%lf %s %s %lf %d",
+                     &jd, rastring, decstring,
+                     &(obs->dthetay),
+                     &(obs->obscode)) != 5) {
+              fprintf(stderr, "Format error in observation file:\n ->%s\n", inbuff);
+              return (1);
+          }
+      } else {
+          /* Convert strings to ra & dec */
+          /* fprintf(stderr,"%s -> %lf %lf %lf\n", inbuff, obs->xe, obs->ye, obs->ze); */
+          obs->obstime = jd;
+          obs->thetax = DTOR * hmsdeg(rastring);
+          obs->thetay = DTOR * dmsdeg(decstring);
+          obs->dthetax = obs->dthetay = obs->dthetay * ARCSEC;
+          return(-2);
+      }
   }
   
   /* Convert strings to ra & dec */
@@ -231,6 +250,7 @@ read_radec(OBSERVATION obsarray[], char *fname, int *nobs)
 {
   FILE *fptr;
   OBSERVATION  *obs;
+  int  scan_status_flag;
   int  i;
   char	inbuff[256];
   double jd,ra,dec,elat,elon;
@@ -244,7 +264,18 @@ read_radec(OBSERVATION obsarray[], char *fname, int *nobs)
 
   *nobs=0;
   while ( fgets_nocomment(inbuff,255,fptr,NULL)!=NULL) {
-    if ( scan_observation(inbuff, &(obsarray[*nobs]))) {
+
+    // obs refers to the previous observation, after the first loop.
+    scan_status_flag = scan_observation(inbuff, &(obsarray[*nobs]), obs);
+
+    // scanned line was 2nd line of two line format so don't advance nobs as all we did was reset the observer x/y
+    if (scan_status_flag == -1) {
+      mpc3d(obs->obstime, &(obs->xe), &(obs->ye), &(obs->ze));
+      continue;
+    }
+
+    // all other non-zero status values indicate an error.
+    if ( scan_status_flag == 1) {
       fprintf(stderr,"Quitting on format error\n");
       exit(1);
     }
@@ -283,9 +314,12 @@ read_radec(OBSERVATION obsarray[], char *fname, int *nobs)
 	       lat0,lon0,NULL);
     /* Calculate the position of Earth at this time to avoid doing
      * it many times later: */
-    earth3d(obs->obstime, obs->obscode,
-	    &(obs->xe),&(obs->ye),&(obs->ze));
-		
+    if (scan_status_flag == -2) {
+      mpc3d(obs->obstime, &(obs->xe), &(obs->ye), &(obs->ze));
+    } else {
+      earth3d(obs->obstime, obs->obscode,
+              &(obs->xe), &(obs->ye), &(obs->ze));
+    }
   }
   if (fname!=NULL) fclose(fptr);
   return(0);
@@ -541,6 +575,32 @@ print_matrix(FILE *fptr, double **matrix, int xdim, int ydim)
     }
     fprintf(fptr,"\n");
   }
+  return;
+}
+
+/* Function to return xyz coords of observatory in the current
+ * standard coordinate system based on 2line MPC supplied values
+ */
+void
+mpc3d(double t,       /* time is in years here */
+        double *x, double *y, double *z)
+{
+  double xTelEq,yTelEq,zTelEq;
+  double xec, yec, zec;
+  double xgeo[3];
+
+  geo_to_ssbary(t/DAY+jd0, x, y, z);
+
+  /* convert to tangent-point coord system */
+  /* via ecliptic */
+  xyz_eq_to_ec(*x, *y, *z, &xec, &yec, &zec,NULL);
+  xyz_ec_to_proj(xec, yec, zec, x, y, z, lat0, lon0, NULL);
+
+  /* Translate to our origin */
+  *x += xBary;
+  *y += yBary;
+  *z += zBary;
+
   return;
 }
 

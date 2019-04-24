@@ -116,6 +116,11 @@ kbo3d(PBASIS *pin,
       double dy[],
       double dz[]);
 
+/* 3-space position of observer given by standard MPC twoline */
+/* MPC values are given in supplied x/y/z and transformed to proj */
+void 
+mpc3d(double t, /* time is in years here */
+      double *x, double *y, double *z);
 /* 3-space position of Earth */
 void
 earth3d(double t,	/* time is in years here */
@@ -195,9 +200,7 @@ kbo2d_linear(PBASIS *pin,
                            double **pderivs); */
  
 /* extract observations from a string */
-int
-scan_observation(char *inbuff,
-		 OBSERVATION *obs);
+int scan_observation(char *inbuff, OBSERVATION *obs, OBSERVATION *previous_obs);
 /* read RA/DEC from file & set up coord systems */
 int
 read_radec(OBSERVATION obsarray[], 

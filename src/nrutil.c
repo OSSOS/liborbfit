@@ -1,11 +1,11 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include "nrutil.h"
 
-void nrerror(error_text)
-char error_text[];
+void nrerror(char error_text[])
 /* Numerical Recipes standard error handler */
 {
-	void _exit();
+	void _exit(int );
 
 	fprintf(stderr,"Numerical Recipes run-time error...\n");
 	fprintf(stderr,"%s\n",error_text);
@@ -13,8 +13,7 @@ char error_text[];
 	_exit(1);
 }
 
-float *vector(nl,nh)
-int nl,nh;
+float *vector(int nl,int nh)
 /* allocate a float vector with subscript range v[nl..nh] */
 {
 	float *v;
@@ -24,8 +23,7 @@ int nl,nh;
 	return v;
 }
 
-int *ivector(nl,nh)
-int nl,nh;
+int *ivector(int nl,int nh)
 /* allocate an int vector with subscript range v[nl..nh] */
 {
 	int *v;
@@ -35,8 +33,7 @@ int nl,nh;
 	return v;
 }
 
-double *dvector(nl,nh)
-int nl,nh;
+double *dvector(int nl,int nh)
 /* allocate a double vector with subscript range v[nl..nh] */
 {
 	double *v;

@@ -1,6 +1,4 @@
-void lubksb(a,n,indx,b)
-double **a,b[];
-int n,*indx;
+void lubksb(double **a, int n,int *indx, double b[])
 {
 	int i,ii=0,ip,j;
 	double sum;
