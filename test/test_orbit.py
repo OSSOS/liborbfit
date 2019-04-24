@@ -1,12 +1,29 @@
+# -*- coding: utf-8 -*-
+from __future__ import (absolute_import, division, print_function,
+                        unicode_literals)
 import unittest
 import mp_ephem
 from astropy import units
 import os
 
 
+class SimonFormat(unittest.TestCase):
+
+    def setUp(self):
+        self.mpc_filename = 'data/simon_format.txt'
+
+    def test_parser(self):
+        obs = mp_ephem.EphemerisReader().read(self.mpc_filename)
+        self.assertIsInstance(obs[0], mp_ephem.Observation)
+
+    def test_fitradec(self):
+        orbit = mp_ephem.BKOrbit(None, self.mpc_filename)
+        orbit.predict(orbit.observations[0].date)
+        self.assertAlmostEqual(orbit.a.to('au').value, 43.8026798, 5)
+
 class OrbitFit(unittest.TestCase):
 
-    def _setUp(self):
+    def setUp(self):
         mpc_filename = 'data/o3o08.mpc'
         self.abg_filename = 'data/o3o08.abg'
         self.observations = mp_ephem.EphemerisReader().read(mpc_filename)
@@ -25,6 +42,13 @@ class OrbitFit(unittest.TestCase):
         self.assertAlmostEqual(self.orbit.om.to(units.degree).value, 66.24, 2)
         self.assertAlmostEqual(self.orbit.T.to(units.day).value, 2447884.5070, 3)
         self.assertAlmostEqual(self.orbit.epoch.jd, 2456392.05115, 4)
+
+    def test_summarize(self):
+        """
+        Print a summary of the observation.
+        :return:
+        """
+        self.assertIsInstance(self.orbit.summarize(), str)
 
     def test_data(self):
         """
@@ -50,8 +74,9 @@ class OrbitFit(unittest.TestCase):
     def test_OSSOSParser(self):
         mpc_line = " O13BL3UV     C2013 08 02.50855 01 00 04.549+04 59 01.53         24.3 r      568 O 1645236p27 L3UV Y 106.35 4301.85 0.20 0 24.31 0.15 % hurrah!"
         obs = mp_ephem.Observation.from_string(mpc_line)
-        print(type(obs.comment))
         self.assertIsInstance(obs.comment, mp_ephem.OSSOSComment)
+        self.assertAlmostEqual(obs.comment.x, 106.35)
+        self.assertAlmostEqual(obs.comment.y, 4301.85)
         mpc_line = "     K01QX1F 1C2000 08 26.21908 23 10 50.37 -05 45 16.1          22.6 R      807 19000101_500_1 20170607 0000000000                       link o3l06PD = 2001 QF331 = K01QX1F"
         obs = mp_ephem.Observation.from_string(mpc_line)
         self.assertIsInstance(obs.comment, mp_ephem.MPCComment)
@@ -64,7 +89,7 @@ class OrbitFit(unittest.TestCase):
         self.assertIsInstance(obs.comment, mp_ephem.OSSOSComment)
         mpc_line = "q3615K06UW1O HC2018 09 12.62432 01 13 26.144+05 53 05.74               q~2kJo568"
         obs = mp_ephem.Observation.from_string(mpc_line)
-        self.assertIsInstance(obs.comment, mp_ephem.OSSOSComment)
+        self.assertIsInstance(obs.comment, str)
 
     def test_orbfit_residuals(self):
         mpc_lines = ("     HL7j2    C2013 04 03.62926 17 12 01.16 +04 13 33.3          24.1 R      568",
