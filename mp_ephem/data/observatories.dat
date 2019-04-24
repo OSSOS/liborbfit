@@ -1,4 +1,4 @@
-#	$Id: observatories.dat,v 2.0 2001/09/14 19:05:06 garyb Exp $	
+# -*- coding: utf-8 -*-
 # File with data on observatories
 500    0:00:00     0:00:00    -6200.  Geocenter
 046  -14:17:17.2  48:51:47.8  1061.61 Klet Observatory, Ceske Budejovice

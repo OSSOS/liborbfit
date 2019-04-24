@@ -9,4 +9,4 @@ class TimeTest(unittest.TestCase):
         time_str = '2001 01 01.00001'
         time_precision = 5
         this_time = Time(time_str, scale='utc', precision=time_precision)
-        self.assertEquals(str(this_time), time_str)
+        self.assertEqual(str(this_time), time_str)

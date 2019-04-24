@@ -108,29 +108,28 @@ class TimeMPC(TimeString):
         Generator that yields a dict of values corresponding to the
         calendar date and time for the internal JD values.
         """
-        iys, ims, ids, ihmsfs = d2dtf(self.scale.upper()
-                                      .encode('utf8'),
-                                      6,
-                                      self.jd1, self.jd2)
+        scale = self.scale.upper().encode('ascii'),
+        iys, ims, ids, ihmsfs = d2dtf(scale, self.precision,
+                                      self.jd1, self.jd2_filled)
 
         # Get the str_fmt element of the first allowed output subformat
         _, _, str_fmt = self._select_subfmts(self.out_subfmt)[0]
 
         yday = None
-        has_yday = '{yday:' in str_fmt or False
+        has_yday = True if '{yday:' in str_fmt else False
 
-        ihrs = ihmsfs[..., 0]
-        imins = ihmsfs[..., 1]
-        isecs = ihmsfs[..., 2]
-        ifracs = ihmsfs[..., 3]
-        for iy, im, iday, ihr, imin, isec, ifracsec in numpy.nditer(
+        ihrs = ihmsfs['h']
+        imins = ihmsfs['m']
+        isecs = ihmsfs['s']
+        ifracs = ihmsfs['f']
+        for iy, im, id, ihr, imin, isec, ifracsec in numpy.nditer(
                 [iys, ims, ids, ihrs, imins, isecs, ifracs]):
             if has_yday:
-                yday = datetime(iy, im, iday).timetuple().tm_yday
+                yday = datetime(iy, im, id).timetuple().tm_yday
 
             fracday = (((((ifracsec / 1000000.0 + isec) / 60.0 + imin) / 60.0) + ihr) / 24.0) * (10 ** 6)
             fracday = '{0:06g}'.format(fracday)[0:self.precision]
 
-            yield {'year': int(iy), 'mon': int(im), 'day': int(iday),
+            yield {'year': int(iy), 'mon': int(im), 'day': int(id),
                    'hour': int(ihr), 'min': int(imin), 'sec': int(isec),
                    'fracsec': int(ifracsec), 'yday': yday, 'fracday': fracday}

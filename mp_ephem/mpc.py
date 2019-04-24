@@ -3,7 +3,7 @@ import requests
 import re
 import logging
 from . import EphemerisReader
-import StringIO
+import io
 
 MPCSERVER = "https://www.minorplanetcenter.net"
 
@@ -31,6 +31,6 @@ def download_mpc_database(target):
 
 def get_mpc_observations(target):
 
-    fobj = StringIO.StringIO(download_mpc_database(target))
+    fobj = io.StringIO(download_mpc_database(target))
     return EphemerisReader().read(fobj)
 

@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+from __future__ import (absolute_import, division, print_function,
+                        unicode_literals)
 import os
 import re
 import struct
@@ -18,12 +21,15 @@ DEFAULT_ASTROMETRIC_NETWORK = "UCAC4"
 
 _KNOWN_OBSERVAOTRY_CODES = []
 __PATH__ = os.path.dirname(__file__)
-with open(os.getenv('ORBIT_OBSERVATORIES', os.path.join(__PATH__, 'data', 'observatories.dat')),'r') as observatories:
-    for line in observatories.readlines():
-        if line.startswith('#'):
-            continue
-        _KNOWN_OBSERVAOTRY_CODES.append(line.split()[0])
+OBSERVATORIES_FILENAME = os.getenv('ORBIT_OBSERVATORIES', os.path.join(__PATH__, 'data', 'observatories.dat'))
 
+# Build a list of observatories our observatories.dat file knows about, we will set the remaining ones to 500
+observatories = open(OBSERVATORIES_FILENAME, mode='r', encoding='utf-8')
+for line in observatories.readlines():
+    if line.startswith('#'):
+        continue
+    _KNOWN_OBSERVAOTRY_CODES.append(line.split()[0])
+observatories.close()
 
 MPCNOTES = {"Note1": {" ": " ",
                       "": " ",
@@ -104,6 +110,10 @@ class MinorPlanetNumber(object):
                                           "1 char or digit and 4 digits",
                                           minor_planet_number)
 
+    def __format__(self, format_spec):
+        return self.__str__()
+
+
     def __str__(self):
         if self._minor_planet_number is None:
             return ""
@@ -117,6 +127,12 @@ class MinorPlanetNumber(object):
 
     def __int__(self):
         return self._minor_planet_number
+
+    def __lt__(self, other):
+        return int(self) < int(other)
+
+    def __gt__(self, other):
+        return int(self) > int(other)
 
     def __cmp__(self, other):
         return cmp(int(self), int(other))
@@ -136,8 +152,8 @@ class NullObservation(object):
         A boolean object that keeps track of True/False status via a set of magic characters.
         """
         if null_observation is not None and \
-                isinstance(null_observation, basestring) and len(str(null_observation).strip(' ')) > 0 and \
-                        null_observation not in NullObservation.NULL_OBSERVATION_CHARACTERS:
+                isinstance(null_observation, str) and len(str(null_observation).strip(' ')) > 0 and \
+                null_observation not in NullObservation.NULL_OBSERVATION_CHARACTERS:
             raise MPCFieldFormatError("null_observation",
                                       "one of " + str(NullObservation.NULL_OBSERVATION_CHARACTERS),
                                       null_observation)
@@ -146,12 +162,15 @@ class NullObservation(object):
         self.null_observation_character = null_observation_character
 
         self._null_observation = None
-        if isinstance(null_observation, basestring):
+        if isinstance(null_observation, str):
             self._null_observation = null_observation in NullObservation.NULL_OBSERVATION_CHARACTERS
         elif isinstance(null_observation, bool):
             self._null_observation = null_observation
         else:
             self._null_observation = False
+
+    def __format__(self, format_spec):
+        return self.__str__()
 
     def __str__(self):
         return self._null_observation and self.null_observation_character or " "
@@ -177,6 +196,9 @@ class TNOdbFlags(object):
         if not re.match("\d{12}", flags):
             raise ValueError("illegal flag string: {}".format(flags))
         self.__flags = flags
+
+    def __format__(self, format_spec):
+        return self.__str__()
 
     def __str__(self):
         return self.__flags
@@ -266,8 +288,8 @@ class MPCNote(object):
 
     @note_type.setter
     def note_type(self, note_type):
-        if note_type not in MPCNOTES.keys():
-            raise ValueError("Invalid note_type: expected one of %s got %s" % (str(MPCNOTES.keys()), note_type))
+        if note_type not in list(MPCNOTES.keys()):
+            raise ValueError("Invalid note_type: expected one of %s got %s" % (str(list(MPCNOTES.keys())), note_type))
         self._note_type = note_type
 
     @property
@@ -306,6 +328,9 @@ class MPCNote(object):
             if _code not in MPCNOTES[self.note_type]:
                 logging.warning("Unknown note value: {}".format(_code))
         self._code = _code
+
+    def __format__(self, format_spec):
+        return self.__str__()
 
     def __str__(self):
         return str(self.code)
@@ -382,11 +407,10 @@ def compute_precision(coord):
     """
     coord = str(coord).strip(' ')
     idx = coord.rfind('.')
-    if idx < 0:
-        return 0
-    else:
-        return len(coord) - idx - 1
-
+    precision = 0
+    if idx > 0:
+        precision = len(coord) - idx - 1
+    return precision
 
 def get_date(date_string):
     """
@@ -397,6 +421,17 @@ def get_date(date_string):
     """
     _date_precision = compute_precision(date_string)
     return Time(date_string, format='mpc', scale='utc', precision=_date_precision)
+
+
+class ObserverLocation(object):
+    """
+    Store the geocentric location of the observer
+    """
+
+    def __init__(self, x, y, z):
+        self.x = x
+        self.y = y
+        self.z = z
 
 
 class ObsRecord(object):
@@ -463,12 +498,12 @@ class ObsRecord(object):
         self._date_precision = None
         self.date = date
         self._coordinate = None
-        self.coordinate = (ra, dec)
         self._mag = None
         self._mag_err = None
         self._mag_precision = 1
         self._ra_precision = 3
         self._dec_precision = 2
+        self.coordinate = (ra, dec)
         self.mag = mag
         self.mag_err = mag_err
         self._band = None
@@ -476,6 +511,7 @@ class ObsRecord(object):
         self._observatory_code = None
         self.observatory_code = observatory_code
         self._comment = None
+        self.location = None
         self.comment = OSSOSComment(version="O", frame=frame,
                                     source_name=provisional_name,
                                     photometry_note="",
@@ -533,7 +569,7 @@ class ObsRecord(object):
             end_pos = start_pos + len(parts[part])
             args[part] = ted[start_pos:end_pos]
         return ObsRecord(provisional_name=args['provisional_name'],
-                         date=args['date'].replace("  "," "),
+                         date=args['date'].replace("  ", " "),
                          ra=args['ra'],
                          dec=args['dec'],
                          mag=args['mag'],
@@ -569,9 +605,16 @@ class ObsRecord(object):
         if len(mpc_line) > 0 and mpc_line[0] == '#':
             return MPCComment.from_string(mpc_line[1:])
 
+        if mpc_line[31:34] == ' 1 ':
+            # This is a spacecraft telemetry line for the previous Observation.
+            x = float(mpc_line[34] + mpc_line[35:45].strip())
+            y = float(mpc_line[46] + mpc_line[47:57].strip())
+            z = float(mpc_line[58] + mpc_line[59:69].strip())
+            return ObserverLocation(x, y, z)
+
         comment = mpc_line[81:]
         mpc_line = mpc_line[0:80]
-        if len(mpc_line) != 80 and len(mpc_line)>0:
+        if len(mpc_line) != 80 and len(mpc_line) > 0:
             logging.info("{}".format(mpc_line))
             logging.info("mpc line is only {} chars long, trying .ted format".format(len(mpc_line)))
             try:
@@ -584,7 +627,9 @@ class ObsRecord(object):
         for format_name in struct_formats:
             try:
                 logging.debug("Trying to parse with {}".format(format_name))
-                obsrec = cls(*struct.unpack(struct_formats[format_name], mpc_line))
+                args = [str(arg, 'utf-8').strip() for arg in struct.unpack(struct_formats[format_name],
+                                                                           bytes(mpc_line, 'utf-8'))]
+                obsrec = cls(*args)
                 break
             except Exception as ex:
                 logging.debug("Failed: {}".format(ex))
@@ -595,7 +640,7 @@ class ObsRecord(object):
             # try converting using Alex Parker's .ast format:
             # 2456477.78468 18:39:07.298 -20:40:17.53 0.2 304
             try:
-                _parts = mpc_line.split(' ')
+                _parts = input_line.split(' ')
                 args = {"date": Time(float(_parts[0]), scale='utc', format='jd').mpc,
                         "discovery": False,
                         "ra": _parts[1].replace(":", " "),
@@ -605,7 +650,30 @@ class ObsRecord(object):
                 obsrec = cls(**args)
                 return obsrec
             except Exception as ex:
-                obsrec = None
+                logging.debug("Failed to parse as AP format: {}".format(str(ex)))
+
+        if obsrec is None:
+            logging.debug("Trying Simon Porter format")
+            try:
+                _parts = input_line.split()
+                year = int(_parts[1])
+                month = int(_parts[2])
+                day = float(_parts[3])
+                obs_date = Time("{:4d} {:02d} {:08.5f}".format(year, month, day), format='mpc', precision=5)
+                args = {"date": obs_date,
+                        "provisional_name": _parts[0],
+                        'discovery': False,
+                        'ra': "{} {} {}".format(_parts[7], _parts[8], _parts[9]),
+                        'dec': "{} {} {}".format(_parts[10], _parts[11], _parts[12]),
+                        'mag': float(_parts[13]),
+                        'mag_err': float(_parts[14]),
+                        'observatory_code': 500,
+                        'comment': " ".join(_parts[15:])}
+                obsrec = cls(**args)
+                obsrec.location = ObserverLocation(_parts[4], _parts[5], _parts[6])
+                return obsrec
+            except Exception as ex:
+                logging.debug("Failed to parse as Simon Porter format: {}".format(str(ex)))
 
         if obsrec is None or not obsrec:
             if mpc_line is not None and len(mpc_line) > 0:
@@ -838,7 +906,9 @@ class ObsRecord(object):
         try:
             self._coordinate = SkyCoord(val1, val2)
             return
-        except:
+        except Exception as ex:
+            logging.debug("Failed to turn {} {} into SkyCoord".format(val1, val2))
+            logging.debug(str(ex))
             pass
 
         # Now try treating them as floats in degrees.
@@ -847,7 +917,9 @@ class ObsRecord(object):
             dec = float(val2)
             self._coordinate = SkyCoord(ra, dec, unit=(units.degree, units.degree))
             return
-        except:
+        except Exception as ex:
+            logging.debug("Failed to create coordinate using RA/DEC as degrees: {}/{}".format(val1, val2))
+            logging.debug(str(ex))
             pass
 
         # Maybe they are strings and then assume HH:MM:SS dd:mm:ss
@@ -913,6 +985,7 @@ class ObsRecord(object):
                                       observatory_code)
         self._observatory_code = str(observatory_code)
 
+
 # Create an Observation class that matches the ObsRecord class.  The new class name is ObsRecord (for disambiguation)
 # but the old name is kept available for backward compatibility.
 Observation = ObsRecord
@@ -925,6 +998,9 @@ class MPCComment(object):
 
     def __init__(self, comment):
         self.comment = str(comment)
+
+    def __format__(self, format_spec):
+        return self.__str__()
 
     def __str__(self):
         return str(self.comment)
@@ -1032,7 +1108,8 @@ class OSSOSComment(object):
                         orig_ossos_comment_format]:
             try:
                 logging.debug("Parsing using structure: {}".format(struct_))
-                retval = cls(*struct.unpack(struct_, values[0]))
+                args = [str(arg, 'utf-8') for arg in struct.unpack(struct_, bytes(values[0], 'utf-8'))]
+                retval = cls(*args)
                 retval.comment = values[1]
                 return retval
             except Exception as e:
@@ -1079,7 +1156,7 @@ class OSSOSComment(object):
             retval.mag_uncertainty = values[7]
             retval.plate_uncertainty = values[8]
         elif len(values) == 10:
-            if float(values[8]) < 1 :  # if there are 9 values then the new astrometric level value is set after mag
+            if float(values[8]) < 1:  # if there are 9 values then the new astrometric level value is set after mag
                 retval.plate_uncertainty = values[8]
                 retval.astrometric_level = values[9]
                 logging.debug('here now')
@@ -1163,7 +1240,7 @@ class OSSOSComment(object):
     def x(self, x):
         try:
             self._x = float(x)
-        except:
+        except Exception:
             self._x = None
 
     @property
@@ -1174,7 +1251,7 @@ class OSSOSComment(object):
     def y(self, y):
         try:
             self._y = float(y)
-        except:
+        except Exception:
             self._y = None
 
     @property
@@ -1185,7 +1262,7 @@ class OSSOSComment(object):
     def plate_uncertainty(self, plate_uncertainty):
         try:
             self._plate_uncertainty = float(plate_uncertainty)
-        except:
+        except Exception:
             self._plate_uncertainty = 0.2
         if not 0 < self._plate_uncertainty < 1.:
             raise ValueError("Plate uncertainty must be between 0 and 1. (in arc-seconds)")
@@ -1199,7 +1276,7 @@ class OSSOSComment(object):
         if comment is not None:
             try:
                 self._comment = str(comment.strip())
-            except:
+            except Exception:
                 self._comment = ''
         else:
             self._comment = ''
@@ -1210,8 +1287,11 @@ class OSSOSComment(object):
             if value is None:
                 raise ValueError("Don't print None.")
             return sep + frmt.format(value)
-        except:
+        except Exception:
             return sep + default
+
+    def __format__(self, format_spec):
+        return self.__str__()
 
     def __str__(self):
         """
@@ -1338,7 +1418,7 @@ class MPCWriter(object):
         self.filehandle.close()
 
     def get_chronological_buffered_observations(self):
-        jds = self.buffer.keys()
+        jds = list(self.buffer.keys())
         jds.sort()
         sorted_obs = []
         for jd in jds:
@@ -1366,9 +1446,9 @@ def make_tnodb_header(observations,
     if observers is not None:
         header += "OBS {}".format(observers[0])
         if len(observers) > 2:
-	   header += ", {}".format(", ".join(observers[1:-1]))
+            header += ", {}".format(", ".join(observers[1:-1]))
         if len(observers) > 1:
-           header += " and {}".format(observers[-1])
+            header += " and {}".format(observers[-1])
         header += "\n"
     if measurers is not None:
         header += "MEA {}".format(measurers[0])
@@ -1413,8 +1493,8 @@ class EphemerisReader(object):
         input_mpc_lines = None
         while True:
             try:
-                if isinstance(filename, basestring):
-                    filehandle = open(filename, "rb")
+                if isinstance(filename, str):
+                    filehandle = open(filename, "r")
                 else:
                     filehandle = filename
 
@@ -1441,6 +1521,9 @@ class EphemerisReader(object):
             if isinstance(mpc_observation, OSSOSComment):
                 next_comment = mpc_observation
                 continue
+            if isinstance(mpc_observation, ObserverLocation):
+                mpc_observations[-1].location = mpc_observation
+                continue
             if isinstance(mpc_observation, ObsRecord):
                 if next_comment is not None:
                     mpc_observation.comment = next_comment
@@ -1449,7 +1532,7 @@ class EphemerisReader(object):
                 if self.replace_provisional is not None:  # then it has an OSSOS designation: set that in preference
                     mpc_observation.provisional_name = self.provisional_name
                 if len(str(mpc_observation.provisional_name.strip())) == 0 and \
-                                str(mpc_observation.minor_planet_number) == "":
+                        str(mpc_observation.minor_planet_number) == "":
                     mpc_observation.provisional_name = filename.split(".")[0]
                 mpc_observations.append(mpc_observation)
 
@@ -1466,7 +1549,7 @@ class EphemerisReader(object):
         """
         if self._provisional_name is not None:
             return self._provisional_name
-        if isinstance(self.filename, basestring):
+        if isinstance(self.filename, str):
             self._provisional_name = self.filename.rstrip('.ast')
         elif hasattr(self.filename, 'name'):
             self._provisional_name = self.filename.name
@@ -1490,16 +1573,19 @@ class Index(object):
         self.names = {}
         self.index = {}
         if os.access(idx_filename, os.F_OK):
-          with open(idx_filename, 'r') as idx_handle:
-            for line in idx_handle.readlines():
-                master_name = line[0:Index.MAX_NAME_LENGTH]
-                master_name = master_name.strip()
-                self.names[master_name] = master_name
-                self.index[master_name] = [master_name]
-                for i in range(Index.MAX_NAME_LENGTH, len(line), Index.MAX_NAME_LENGTH):
-                    this_name = line[i:i + Index.MAX_NAME_LENGTH].strip()
-                    self.index[master_name].append(this_name)
-                    self.names[this_name] = master_name
+            with open(idx_filename, 'r') as idx_handle:
+                for line in idx_handle.readlines():
+                    master_name = line[0:Index.MAX_NAME_LENGTH]
+                    master_name = master_name.strip()
+                    self.names[master_name] = master_name
+                    self.index[master_name] = [master_name]
+                    for i in range(Index.MAX_NAME_LENGTH, len(line), Index.MAX_NAME_LENGTH):
+                        this_name = line[i:i + Index.MAX_NAME_LENGTH].strip()
+                        self.index[master_name].append(this_name)
+                        self.names[this_name] = master_name
+
+    def __format__(self, format_spec):
+        return self.__str__()
 
     def __str__(self):
         result = ""
@@ -1653,4 +1739,3 @@ class RealOSSOSComment(OSSOSComment):
         if comment.strip()[0] != "O":
             comment = "O " + comment
         return super(RealOSSOSComment, cls).from_string(comment)
-

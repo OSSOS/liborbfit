@@ -361,9 +361,9 @@ class Body(object):
     def _parse_ephemeris(self):
         """Parse the ephemeris out of the responses from Horizons and place in self._ephemeris."""
 
-        start_of_ephemeris = '$$SOE'
-        end_of_ephemeris = '$$EOE'
-        start_of_failure = '!$$SOF'
+        start_of_ephemeris = b'$$SOE'
+        end_of_ephemeris = b'$$EOE'
+        start_of_failure = b'!$$SOF'
         start_idx = None
         end_idx = None
         for idx, line in enumerate(self.data):
@@ -383,8 +383,10 @@ class Body(object):
             raise ValueError(msg, "failed to build ephemeris")
 
         # the header of the CSV structure is 2 lines before the start_of_ephmeris
-        csv_lines = [self.data[start_idx - 2]]
-        csv_lines.extend(self.data[start_idx + 1: end_idx])
+        csv_lines = [str(self.data[start_idx - 2], 'utf-8')]
+        for l in self.data[start_idx+1:end_idx]:
+            line = str(l, 'utf-8')
+            csv_lines.append(line)
         csv = Csv()
         table = csv.read(csv_lines)
         try:

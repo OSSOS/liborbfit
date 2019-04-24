@@ -1,5 +1,6 @@
 import ctypes
 import datetime
+import glob
 import logging
 import math
 import numpy
@@ -9,7 +10,7 @@ from astropy.coordinates import SkyCoord
 from astropy import units
 from astropy.units.quantity import Quantity
 from astropy.time import Time
-from .ephem import  EphemerisReader, ObsRecord
+from .ephem import EphemerisReader, ObsRecord
 
 __author__ = 'jjk'
 
@@ -34,9 +35,11 @@ class BKOrbit(object):
         :rtype : Orbfit
         """
         __PATH__ = os.path.dirname(__file__)
-        __ORBFIT_LIB__ = os.path.join(__PATH__, "orbit.so")
-        is_64bits = ctypes.sizeof(ctypes.c_voidp) == 8
+        # find the orbit.so library
+        __ORBFIT_LIB__ = glob.glob(os.path.join(__PATH__, '*orbit*.so'))[0]
 
+        # Choose a format of JPL binary ephemeris file
+        is_64bits = ctypes.sizeof(ctypes.c_voidp) == 8
         bin_ephem = is_64bits and 'binEphem.405_64' or 'binEphem.405_32'
 
         os.environ['ORBIT_EPHEMERIS'] = os.getenv('ORBIT_EPHEMERIS',
@@ -47,9 +50,10 @@ class BKOrbit(object):
                                                                    'observatories.dat'))
         liborbfit = os.path.join(__ORBFIT_LIB__)
         self.orbfit = ctypes.CDLL(liborbfit)
+
         if ast_filename is None:
             assert isinstance(observations, tuple) or isinstance(observations, list) or isinstance(observations,
-                                                                                               numpy.ndarray)
+                                                                                                   numpy.ndarray)
 
         self._observations = observations
         self._r_mag = None
@@ -68,7 +72,7 @@ class BKOrbit(object):
     @property
     def observations(self):
         if self._observations is None:
-             self._observations = EphemerisReader().read(self.ast_filename)
+            self._observations = EphemerisReader().read(self.ast_filename)
         return self._observations
 
     def compute_median_mag(self, band):
@@ -94,11 +98,9 @@ class BKOrbit(object):
     
     @property
     def mag(self):
-	return self.r_mag
- 
+        return self.r_mag
+
     def _fit_radec(self):
-
-
         # call fit_radec with mpcfile and abgfile
         self.orbfit.fitradec.restype = ctypes.POINTER(ctypes.c_double * 2)
         self.orbfit.fitradec.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
@@ -107,7 +109,7 @@ class BKOrbit(object):
             build_abg = False
             _abg_file = open(self.abg_filename, 'r')
         if build_abg:
-            _mpc_file = tempfile.NamedTemporaryFile(suffix='.mpc')
+            _mpc_file = tempfile.NamedTemporaryFile(mode='w', suffix='.mpc')
             if len(self.observations) < 3:
                 raise BKOrbitError()
 
@@ -115,7 +117,7 @@ class BKOrbit(object):
                 try:
                     if observation.null_observation:
                         continue
-                except:
+                except Exception:
                     pass
                 assert isinstance(observation, ObsRecord)
                 obs = observation
@@ -123,21 +125,30 @@ class BKOrbit(object):
                 ra = obs.ra.replace(" ", ":")
                 dec = obs.dec.replace(" ", ":")
                 res = getattr(obs.comment, 'plate_uncertainty', 0.2)
-                _mpc_file.write("{} {} {} {} {}\n".format(obs.date.jd, ra, dec, res, int(obs.observatory_code) ))
+                if obs.location is None:
+                    _mpc_file.write("{} {} {} {} {}\n".format(obs.date.jd, ra, dec, res, int(obs.observatory_code) ))
+                else:
+                    _mpc_file.write("{} {} {} {} {} {} {}\n".format(obs.date.jd, ra, dec, res,
+                                                                    obs.location.x,
+                                                                    obs.location.y,
+                                                                    obs.location.z))
+
             _mpc_file.seek(0)
             if self.abg_filename is None:
-                _abg_file = tempfile.NamedTemporaryFile(suffix='.abg')
+                _abg_file = tempfile.NamedTemporaryFile(mode='w+', suffix='.abg')
+                _abg_file_name = _abg_file.name
             else:
                 _abg_file = open(self.abg_filename, 'w+')
-            result = self.orbfit.fitradec(ctypes.c_char_p(_mpc_file.name),
-                                          ctypes.c_char_p(_abg_file.name))
+                _abg_file_name = _abg_file.name
+            result = self.orbfit.fitradec(ctypes.c_char_p(bytes(_mpc_file.name, 'utf-8')),
+                                          ctypes.c_char_p(bytes(_abg_file_name, 'utf-8')))
 
         _abg_file.seek(0)
 
         # call abg_to_aei to get elliptical elements and their chi^2 uncertainty.
         self.orbfit.abg_to_aei.restype = ctypes.POINTER(ctypes.c_double * 15)
         self.orbfit.abg_to_aei.argtypes = [ctypes.c_char_p]
-        result = self.orbfit.abg_to_aei(ctypes.c_char_p(_abg_file.name))
+        result = self.orbfit.abg_to_aei(ctypes.c_char_p(bytes(_abg_file.name, 'utf-8')))
         self._a = result.contents[0] * units.AU
         self._da = result.contents[6] * units.AU
         self._e = result.contents[1] * units.dimensionless_unscaled
@@ -266,19 +277,18 @@ class BKOrbit(object):
     @property
     def ra(self):
         """
-        :return: Right Ascention in Equaltorial J2000 coordinates.
+        :return: Right Ascension in Equatorial J2000 coordinates.
         :rtype: Quantity
         """
-        self.coordinate.ra
+        return self.coordinate.ra
 
     @property
     def dec(self):
         """
-        :return: Declination in Equaltorial J2000 coordinates.
+        :return: Declination in Equatorial J2000 coordinates.
         :rtype: Quantity
         """
-        self.coordinate.dec
-
+        return self.coordinate.dec
 
     def compute_residuals(self):
         """
@@ -288,10 +298,10 @@ class BKOrbit(object):
             self.predict(observation.date, obs_code=int(observation.observatory_code))
             coord1 = SkyCoord(self.coordinate.ra, self.coordinate.dec)
             coord2 = SkyCoord(observation.coordinate.ra, self.coordinate.dec)
-            observation.ra_residual = float(coord1.separation(coord2).arcsec)
+            # observation.ra_residual = float(coord1.separation(coord2).arcsec)
             observation.ra_residual = (coord1.ra.degree - coord2.ra.degree) * 3600.0
             coord2 = SkyCoord(self.coordinate.ra, observation.coordinate.dec)
-            observation.dec_residual = float(coord1.separation(coord2).arcsec)
+            # observation.dec_residual = float(coord1.separation(coord2).arcsec)
             observation.dec_residual = (coord1.dec.degree - coord2.dec.degree) * 3600.0
 
     @property
@@ -308,7 +318,9 @@ class BKOrbit(object):
             _residuals = ""
             for observation in self.observations:
                 _residuals += "{:1s}{:12s} {:+05.2f} {:+05.2f} # {}\n".format(
-                    observation.null_observation, observation.date, observation.ra_residual, observation.dec_residual,
+                    str(observation.null_observation),
+                    str(observation.date), observation.ra_residual,
+                    observation.dec_residual,
                     observation)
             self._residuals = _residuals
         return self._residuals
@@ -389,6 +401,9 @@ class BKOrbit(object):
         """
         return self._distance_uncertainty
 
+    def __format__(self, format_spec):
+        return self.__str__()
+
     def __str__(self):
         """
 
@@ -459,12 +474,12 @@ class BKOrbit(object):
         jd = ctypes.c_double(_date.jd)
         if abg_file is None:
             abg_file = tempfile.NamedTemporaryFile(suffix='.abg')
-            abg_file.write(self.abg)
+            abg_file.write(bytes(self.abg, 'utf-8'))
             abg_file.seek(0)
 
         self.orbfit.predict.restype = ctypes.POINTER(ctypes.c_double * 6)
         self.orbfit.predict.argtypes = [ctypes.c_char_p, ctypes.c_double, ctypes.c_int]
-        predict = self.orbfit.predict(ctypes.c_char_p(abg_file.name),
+        predict = self.orbfit.predict(ctypes.c_char_p(bytes(abg_file.name, 'utf-8')),
                                       jd,
                                       ctypes.c_int(obs_code))
         self._coordinate = SkyCoord(predict.contents[0],
@@ -532,6 +547,6 @@ class BKOrbit(object):
         summary += str(self.residuals) + "\n"
         summary += 'arc length {} '.format(self.arc_length)
         summary += "Expected accuracy on {:>10s}: {:6.2f} {:6.2f} moving at {:6.2f} \n\n".format(
-            at_date, self.dra, self.ddec, self.rate_of_motion(date=date))
+            str(at_date), self.dra, self.ddec, self.rate_of_motion(date=date))
 
         return summary
