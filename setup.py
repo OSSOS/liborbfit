@@ -9,10 +9,6 @@ dependencies = ['astropy >= 1.0',
                 'numpy >= 1.6.1',
                 'six', 'requests', 'scipy']
 
-if sys.version_info[0] > 2:
-    print('mp_ephem package is only compatible with Python version 2.7+, not yet with 3.x')
-    sys.exit(-1)
-
 sources = [x for x in glob.glob('src/*.c')]
 
 setup(name='mp_ephem',
