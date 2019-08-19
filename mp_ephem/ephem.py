@@ -9,6 +9,7 @@ from astropy.coordinates import SkyCoord
 from astropy import units
 import numpy
 from astropy.time import Time
+from io import open
 
 __author__ = 'jjk, mtb55'
 
