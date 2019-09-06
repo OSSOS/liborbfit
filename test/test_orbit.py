@@ -21,6 +21,7 @@ class SimonFormat(unittest.TestCase):
         orbit.predict(orbit.observations[0].date)
         self.assertAlmostEqual(orbit.a.to('au').value, 43.8026798, 5)
 
+
 class OrbitFit(unittest.TestCase):
 
     def setUp(self):
