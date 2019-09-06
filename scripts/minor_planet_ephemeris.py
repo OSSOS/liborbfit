@@ -30,7 +30,6 @@ def build_ephem_files(target_name, start_time, stop_time, step_size=None, observ
     sun = ephem.Sun()
     fb = ephem.FixedBody()
 
-
     if os.access(target_name, os.F_OK):
         body = bk_orbit.BKOrbit(None, ast_filename=target_name)
         target_name = body.name
@@ -39,7 +38,6 @@ def build_ephem_files(target_name, start_time, stop_time, step_size=None, observ
                          step_size=step_size, center='568')
     current_time = start_time
     body.predict(current_time)
-
     et = EphemTarget(target_name.replace(" ", "_"), ephem_format=ephem_format, runid=runid)
 
     while current_time < stop_time:
@@ -81,7 +79,6 @@ def build_ephem_files(target_name, start_time, stop_time, step_size=None, observ
         current_time += step_size
 
     et.save()
-    print coordinate.mag
 
 
 def minor_planet_ephem(target_names, start_time, stop_time, step_size=None, observatory=None, ephem_format=None, runid=None):
@@ -107,6 +104,7 @@ def minor_planet_ephem(target_names, start_time, stop_time, step_size=None, obse
         build_ephem_files(target_name, start_time, stop_time, step_size=step_size, observatory=observatory,
                           ephem_format=ephem_format, runid=runid)
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('start_time', help="Date at start of dark run.")
@@ -114,7 +112,7 @@ def main():
     parser.add_argument('target_names', nargs="+", help="Names of targets to build ephemeris files for.")
     parser.add_argument('--runid', default='17AC99')
     parser.add_argument('--ephem-format', default='CFHT ET')
-    parser.add_argument('--step-size', help="size of time step for ephemeris.", default=300 * units.minute)
+    parser.add_argument('--step-size', help="size of time step for ephemeris.", default=60 * units.minute)
     parser.add_argument('--observatory', default=None)
 
     args = parser.parse_args()
