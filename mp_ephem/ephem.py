@@ -1494,11 +1494,11 @@ class EphemerisReader(object):
         input_mpc_lines = None
         while True:
             try:
-                if isinstance(filename, str):
-                    filehandle = open(filename, "r")
-                else:
-                    filehandle = filename
+                filehandle = open(filename, "r")
+            except:
+                filehandle = filename
 
+            try:
                 input_mpc_lines = filehandle.read().split('\n')
                 filehandle.close()
                 break
