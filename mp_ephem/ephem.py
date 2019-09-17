@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
+
+import logging
 import os
 import re
 import struct
-import logging
-from astropy.coordinates import SkyCoord
-from astropy import units
-import numpy
-from astropy.time import Time
 from io import open
+
+import numpy
+from astropy import units
+from astropy.coordinates import SkyCoord
+from astropy.table import Table
+from astropy.time import Time
 
 __author__ = 'jjk, mtb55'
 
@@ -1464,6 +1467,39 @@ def make_tnodb_header(observations,
     header += maxdate is not None and "{:s} {:s}\n".format('END', maxdate) or ""
 
     return header
+
+
+class EphemerisWriter(object):
+    """Write out an ephemeris in a given format"""
+
+    def __init__(self, format='votable'):
+        """Only does VOtable for now."""
+        self._columns = ['minor_planet_number', 'provisional_name', 'discovery', 'note1', 'note2', 'date',
+                    'ra', 'dec', 'mag', 'mag_err', 'observatory_code', 'comment']
+
+    def write(self, filename, obs_records):
+        """
+
+        :param obs_records: OBSERAVTIONS TO CREATE VOTABLE OF
+        :type obs_records: [ ObsRecord [
+        :return:
+        """
+        _data_rows = []
+        for record in obs_records:
+            row = [str(record.minor_planet_number),
+                   record.provisional_name,
+                   str(record.discovery), str(record.note1), str(record.note2),
+                   record.date.jd,
+                   float(record.coordinate.ra.to('degree').value),
+                   float(record.coordinate.dec.to('degree').value), record.mag, record.mag_err,
+                   record.observatory_code,
+                   str(record.comment)]
+            _data_rows.append(row)
+        _data_rows = numpy.array(_data_rows)
+        print(_data_rows)
+        _table = Table(data=_data_rows, names=self._columns, dtype=[str, str, bool, str, str, float,
+                                                                    float, float, float, float, str, str])
+        _table.write(filename, format='votable')
 
 
 class EphemerisReader(object):
