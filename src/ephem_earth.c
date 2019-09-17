@@ -763,8 +763,12 @@ observatory_geocenter(double jd,
     /* get the lat, lon, & altitude of this observatory */
     for (i=0; obscode!=sitelist[i].code && i<nsites; i++)  ;
     if (i>=nsites) {
-      fprintf(stderr,"Unknown observatory code %d\n",obscode);
-      exit(1);
+      fprintf(stderr,"Unknown observatory code %d, using barycenter\n",obscode);
+      if (obscode==OBSCODE_GEOCENTER) {
+        *xobs=*yobs=*zobs=0.;
+        return;
+      }
+      /* exit(1); */
     }
     obslon = sitelist[i].lon;
     obslat = sitelist[i].lat;
@@ -806,8 +810,12 @@ observatory_geocenter(double jd,
 
     for (i=0; obscode!=spacecraftlist[i].code && i<nspacecraft; i++)  ;
     if (i>=nspacecraft) {
-      fprintf(stderr,"Unknown spacecraft code %d\n",obscode);
-      exit(1);
+      fprintf(stderr,"Unknown spacecraft code %d, using barycenter\n",obscode);
+      if (obscode==OBSCODE_GEOCENTER) {
+        *xobs=*yobs=*zobs=0.;
+        return;
+      }
+      /* exit(1); */
     }
     s = &(spacecraftlist[i]);
     pole = s->i;
@@ -986,8 +994,12 @@ zenith_horizon(int obscode) {
     if (nsites<=0 && nspacecraft<=0) read_observatories(NULL); 
     for (i=0; obscode!=spacecraftlist[i].code && i<nspacecraft; i++)  ;
     if (i>=nspacecraft) {
-      fprintf(stderr,"Unknown spacecraft code %d\n",obscode);
-      exit(1);
+      fprintf(stderr,"Unknown spacecraft code %d, using barycenter\n",obscode);
+            if (obscode==OBSCODE_GEOCENTER) {
+        *xobs=*yobs=*zobs=0.;
+        return;
+      }
+      /* exit(1); */
     }
     a = spacecraftlist[i].a;
     a /= EQUAT_RAD/(1000.*R1.AU);
