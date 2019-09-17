@@ -75,13 +75,17 @@ class BKOrbit(object):
             self._observations = EphemerisReader().read(self.ast_filename)
         return self._observations
 
-    def compute_median_mag(self, band):
+    @property
+    def min_mag(self):
+        return self.compute_median_mag('r',percentile=5)
+
+    def compute_median_mag(self, band, percentile=50):
         mags = []
         for observation in self.observations:
             if observation.mag is not None and observation.band is not None and observation.band.lower() == band:
                 mags.append(float(observation.mag))
         if len(mags) > 0:
-            return numpy.percentile(mags, 50)
+            return numpy.percentile(mags, percentile)
         return None
 
     @property
@@ -483,8 +487,8 @@ class BKOrbit(object):
                                       jd,
                                       ctypes.c_int(obs_code))
         self._coordinate = SkyCoord(predict.contents[0],
-                                    predict.contents[1],
-                                    unit=(units.degree, units.degree),
+                                    predict.contents[1], distance=predict.contents[5],
+                                    unit=(units.degree, units.degree, units.au),
                                     obstime=_date)
         self._dra = predict.contents[2] * units.arcsec
         self._ddec = predict.contents[3] * units.arcsec
