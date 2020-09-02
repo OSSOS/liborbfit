@@ -92,7 +92,48 @@ double *fitradec(char *mpc_filename, char *abg_filename)
   return result;
 }
 
+/* predict_helio.c - Read a file containing the a/b/g orbit fit and spit out
+ * the predicted barycentric position
+ * 9/20/19 jjk
+ */
 
+double *predict_helio(char *abg_file, double jdate, int obscode) {
+
+  PBASIS p;
+  OBSERVATION futobs;
+  static double result[4];
+  double xk[3];
+  double **covar;
+  int i;
+
+  covar = dmatrix(1,6,1,6);
+
+  for (i = 0; i < 4; i++) {
+    result[i] = -1.0;
+  }
+
+  if (read_abg(abg_file, &p, covar)) {
+    fprintf(stderr, "Error input alpha/beta/gamma file %s\n", abg_file);
+    return result;
+  }
+
+
+  /* get observatory code */
+  futobs.obscode = obscode;
+
+  futobs.obstime = (jdate - jd0) * DAY;
+  futobs.xe = -999.;        /* Force evaluation of earth3d */
+
+
+  kbo3d_helio(&p, &futobs, xk);
+
+  result[0] = xk[0];
+  result[1] = xk[1];
+  result[2] = xk[2];
+
+  return result;
+
+}
 /* predict.c - Read a file containing a/b/g orbit fit, and spit out
  *  predicted RA & dec plus uncertainties on arbitrary date.
  * 8/12/99 gmb
@@ -113,7 +154,7 @@ double *predict(char *abg_file, double jdate, int obscode)
   double yr,mo,day,hr,mn,ss;
   double xx,yy,xy,bovasqrd,det;
   double distance;
-  static double result[6];
+  static double result[8];
   int i,nfields;
   int iarg=1;
 
@@ -123,13 +164,10 @@ double *predict(char *abg_file, double jdate, int obscode)
   covecl = dmatrix(1,2,1,2);
   coveq = dmatrix(1,2,1,2);
 
-  result[0] = -1.0;
-  result[1] = -1.0;
-  result[2] = -1.0;
-  result[3] = -1.0;
-  result[4] = -1.0;
-  result[5] = -1.0;
- 
+    for (i=0;i<8;i++){
+        result[i] = -1.0;
+    }
+
   if (read_abg(abg_file,&p,covar) ) { 
     fprintf(stderr, "Error input alpha/beta/gamma file %s\n",abg_file);
     return result;
@@ -174,7 +212,9 @@ double *predict(char *abg_file, double jdate, int obscode)
   ra /= DTOR;
   if (ra<0.) ra+= 360.;
   dec /= DTOR;
-
+  lat /= DTOR;
+  lon /= DTOR;
+    if (lon<0.) lon+= 360.;
 
    result[0] = ra;
    result[1] = dec;
@@ -182,6 +222,8 @@ double *predict(char *abg_file, double jdate, int obscode)
    result[3] = b/ARCSEC;
    result[4] = PA;
    result[5] = distance;
+   result[6] = lon;
+   result[7] = lat;
 
   return result;
 

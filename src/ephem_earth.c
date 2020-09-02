@@ -996,9 +996,8 @@ zenith_horizon(int obscode) {
     if (i>=nspacecraft) {
       fprintf(stderr,"Unknown spacecraft code %d, using barycenter\n",obscode);
             if (obscode==OBSCODE_GEOCENTER) {
-        *xobs=*yobs=*zobs=0.;
-        return;
-      }
+                return 0.0;
+            }
       /* exit(1); */
     }
     a = spacecraftlist[i].a;

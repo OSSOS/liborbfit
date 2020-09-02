@@ -105,7 +105,12 @@ extern double	xBary, yBary, zBary;	/*Posn of barycenter in our system*/
 extern double	jd0;		/* Zeropoint of time scale */
 
 /* Some functions that we'll need */
- 
+
+extern void
+kbo3d_helio(PBASIS *pin,
+			OBSERVATION *obs,
+			double *xk);
+
 /* give 3-space coords of KBO and derivs w.r.t. parameters */
 extern  void    
 kbo3d(PBASIS *pin,
@@ -187,7 +192,13 @@ kbo2d(PBASIS *pin,
       OBSERVATION *obs,
       double *x, double dx[],
       double *y, double dy[]);
- 
+
+/* heliocentric x/y/z position of KBO and derivs */
+extern  double
+kbo2d_helio(PBASIS *pin,
+	  OBSERVATION *obs,
+	  double *xk, double *dxk);
+
 /* linearized version of the 2d position, ignores gdot term*/
 extern  void
 kbo2d_linear(PBASIS *pin,
@@ -238,6 +249,7 @@ fit_observations(OBSERVATION obsarray[],
                  double *chisq,
                  int *dof,
                  FILE *logfile);
+
 
 /* Routine to predict position and uncertainty at any time, given
  * a PBASIS fit and a sigma matrix.

@@ -4,12 +4,14 @@ import glob
 import logging
 import math
 import numpy
-import tempfile
 import os
-from astropy.coordinates import SkyCoord
+import random
+import tempfile
 from astropy import units
-from astropy.units.quantity import Quantity
+from astropy.coordinates import SkyCoord
 from astropy.time import Time
+from astropy.units.quantity import Quantity
+
 from .ephem import EphemerisReader, ObsRecord
 
 __author__ = 'jjk'
@@ -54,7 +56,6 @@ class BKOrbit(object):
         if ast_filename is None:
             assert isinstance(observations, tuple) or isinstance(observations, list) or isinstance(observations,
                                                                                                    numpy.ndarray)
-
         self._observations = observations
         self._r_mag = None
         self.abg_filename = abg_file
@@ -63,6 +64,9 @@ class BKOrbit(object):
         self._a = self._e = self._inc = self._Node = self._om = self._T = None
         self._da = self._de = self._dinc = self._dNode = self._dom = self._dT = None
         self._coordinate = self._pa = self._dra = self._ddec = self._date = self._time = None
+        self.helio = None
+        self.heliocentric = self.geocentric = None
+        self._lon = self._lat = None
         self._distance = None
         self._distance_uncertainty = None
         self._residuals = None
@@ -104,7 +108,7 @@ class BKOrbit(object):
     def mag(self):
         return self.r_mag
 
-    def _fit_radec(self):
+    def _fit_radec(self, randomize=False):
         # call fit_radec with mpcfile and abgfile
         self.orbfit.fitradec.restype = ctypes.POINTER(ctypes.c_double * 2)
         self.orbfit.fitradec.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
@@ -112,7 +116,7 @@ class BKOrbit(object):
         if self.abg_filename is not None and os.access(self.abg_filename, os.R_OK):
             build_abg = False
             _abg_file = open(self.abg_filename, 'r')
-        if build_abg:
+        if build_abg or randomize:
             _mpc_file = tempfile.NamedTemporaryFile(mode='w', suffix='.mpc')
             if len(self.observations) < 3:
                 raise BKOrbitError()
@@ -129,8 +133,18 @@ class BKOrbit(object):
                 ra = obs.ra.replace(" ", ":")
                 dec = obs.dec.replace(" ", ":")
                 res = getattr(obs.comment, 'plate_uncertainty', 0.2)
+                if randomize:
+                    coordinate = SkyCoord(random.gauss(obs.coordinate.ra.to('degree').value, res/3600.0),
+                                          random.gauss(obs.coordinate.dec.to('degree').value, res/3600.0),
+                                          unit='degree')
+                    ra = coordinate.ra.to_string(unit=units.hour, decimal=False,
+                                                 sep=":", precision=2, alwayssign=False,
+                                                 pad=True)
+                    dec = coordinate.dec.to_string(unit=units.degree, decimal=False,
+                                                   sep=":", precision=1, alwayssign=True,
+                                                   pad=True)
                 if obs.location is None:
-                    _mpc_file.write("{} {} {} {} {}\n".format(obs.date.jd, ra, dec, res, int(obs.observatory_code) ))
+                    _mpc_file.write("{} {} {} {} {}\n".format(obs.date.jd, ra, dec, res, int(obs.observatory_code)))
                 else:
                     _mpc_file.write("{} {} {} {} {} {} {}\n".format(obs.date.jd, ra, dec, res,
                                                                     obs.location.x,
@@ -144,8 +158,8 @@ class BKOrbit(object):
             else:
                 _abg_file = open(self.abg_filename, 'w+')
                 _abg_file_name = _abg_file.name
-            result = self.orbfit.fitradec(ctypes.c_char_p(bytes(_mpc_file.name, 'utf-8')),
-                                          ctypes.c_char_p(bytes(_abg_file_name, 'utf-8')))
+            _ = self.orbfit.fitradec(ctypes.c_char_p(bytes(_mpc_file.name, 'utf-8')),
+                                     ctypes.c_char_p(bytes(_abg_file_name, 'utf-8')))
 
         _abg_file.seek(0)
 
@@ -166,10 +180,11 @@ class BKOrbit(object):
         self._T = result.contents[5] * units.day
         self._dT = result.contents[11] * units.day
         self._epoch = Time(result.contents[12] * units.day, scale='utc', format='jd')
-        _abg_file.seek(0)
         self._distance = result.contents[13] * units.au
         self._distance_uncertainty = result.contents[14] * units.au
+        _abg_file.seek(0)
         self.abg = _abg_file.read()
+        _abg_file.close()
         self._residuals = None
 
     @property
@@ -300,11 +315,11 @@ class BKOrbit(object):
         """
         for observation in self.observations:
             self.predict(observation.date, obs_code=int(observation.observatory_code))
-            coord1 = SkyCoord(self.coordinate.ra, self.coordinate.dec)
-            coord2 = SkyCoord(observation.coordinate.ra, self.coordinate.dec)
+            coord1 = SkyCoord(self.ra, self.dec)
+            coord2 = SkyCoord(observation.coordinate.ra, self.dec)
             # observation.ra_residual = float(coord1.separation(coord2).arcsec)
             observation.ra_residual = (coord1.ra.degree - coord2.ra.degree) * 3600.0
-            coord2 = SkyCoord(self.coordinate.ra, observation.coordinate.dec)
+            coord2 = SkyCoord(self.ra, observation.coordinate.dec)
             # observation.dec_residual = float(coord1.separation(coord2).arcsec)
             observation.dec_residual = (coord1.dec.degree - coord2.dec.degree) * 3600.0
 
@@ -329,6 +344,40 @@ class BKOrbit(object):
             self._residuals = _residuals
         return self._residuals
 
+    def _set_coordinates(self):
+        """
+        Set the coordinates in the ICRS, HELIOCENTRIC and GEOCENTRIC frames based on BK predict values, requires
+        some iteration and HELIO/GEO values are only approximate.
+        :return:
+        """
+        # First set the heliocentric frame coordinate.
+        HELIO_FRAME = 'heliocentricmeanecliptic'
+        GEO_FRAME = 'geocentricmeanecliptic'
+        _geo1 = SkyCoord(self._ra, self._dec, distance=self._distance, frame='gcrs',
+                         obstime=self.time)
+        _helio1 = _geo1.transform_to('hcrs')
+        for i in range(0):
+            # But, distance is actually the geocentricdistance so do an iteration to get to heliocentric value.
+            _geo1 = _helio1.transform_to(GEO_FRAME)
+            _geo2 = SkyCoord(_geo1.lon, _geo1.lat, distance=self.distance,
+                             frame=GEO_FRAME,
+                             obstime=self.time)
+            # Now, turn geo2 into a helio to get the distance close to correct.
+            _helio2 = _geo2.transform_to(HELIO_FRAME)
+            # use the helio coordinates from BK to build a new _helio coordinate.
+            _helio1 = SkyCoord(self._lon, self._lat, distance=_helio2.distance,
+                               frame=HELIO_FRAME,
+                               obstime=self.time)
+        #_geo1 = _helio1.transform_to(GEO_FRAME)
+        #_geo2 = SkyCoord(_geo1.lon, _geo1.lat, distance=self.distance,
+        #                 frame=GEO_FRAME,
+        #                 obstime=self.time)
+        self.heliocentric = _helio1
+        self.geocentric = _geo1
+        self._coordinate = SkyCoord(self._ra, self._dec,
+                                    distance=self.geocentric.transform_to('icrs').distance,
+                                    frame='icrs', obstime=self.time)
+
     @property
     def coordinate(self):
         """
@@ -337,6 +386,7 @@ class BKOrbit(object):
         :rtype: ICRS
         """
         return self._coordinate
+
 
     @property
     def dra(self):
@@ -444,6 +494,50 @@ class BKOrbit(object):
 
         return res
 
+    def predict_helio(self, date, obs_code=568, abg_file=None, minimum_delta=None):
+        """
+        use the bk predict method to compute the location of the source on the given date.
+
+        this methods sets the values of coordinate, dra (arc seconds), ddec (arc seconds), pa, (degrees) and date (str)
+
+        @param date: the julian date of interest or an astropy.core.time.Time object.
+        @param obs_code: the Minor Planet Center observatory location code (Maunakea: 568 is the default)
+        @param minimum_delta: minimum difference in time between recomputing a predicted location.
+        @param abg_file: the 'abg' formatted file to use for the prediction.
+        """
+
+        if minimum_delta is None:
+            # Set the minimum delta to very small value so that we always compute new positions
+            minimum_delta = 0.00001 * units.second
+
+        if not isinstance(date, Time):
+            if isinstance(date, float):
+                try:
+                    date = Time(date, format='jd', scale='utc', precision=6)
+                except:
+                    raise ValueError("Bad date value: {}".format(date))
+            _date = Time(date)
+        else:
+            _date = date
+
+        # for speed reasons we only compute positions every 10 seconds.
+        if hasattr(self, 'time') and isinstance(self.time, Time):
+            if -minimum_delta < self.time - _date < minimum_delta:
+                return
+
+        jd = ctypes.c_double(_date.jd)
+        if abg_file is None:
+            abg_file = tempfile.NamedTemporaryFile(suffix='.abg')
+            abg_file.write(bytes(self.abg, 'utf-8'))
+            abg_file.seek(0)
+
+        self.orbfit.predict_helio.restype = ctypes.POINTER(ctypes.c_double * 3)
+        self.orbfit.predict_helio.argtypes = [ctypes.c_char_p, ctypes.c_double, ctypes.c_int]
+        predict = self.orbfit.predict_helio(ctypes.c_char_p(bytes(abg_file.name, 'utf-8')),
+                                            jd,
+                                            ctypes.c_int(obs_code))
+        self.helio = numpy.array((predict.contents[0], predict.contents[1], predict.contents[2])) * units.au
+
     def predict(self, date, obs_code=568, abg_file=None, minimum_delta=None):
         """
         use the bk predict method to compute the location of the source on the given date.
@@ -481,21 +575,23 @@ class BKOrbit(object):
             abg_file.write(bytes(self.abg, 'utf-8'))
             abg_file.seek(0)
 
-        self.orbfit.predict.restype = ctypes.POINTER(ctypes.c_double * 6)
+        self.orbfit.predict.restype = ctypes.POINTER(ctypes.c_double * 8)
         self.orbfit.predict.argtypes = [ctypes.c_char_p, ctypes.c_double, ctypes.c_int]
         predict = self.orbfit.predict(ctypes.c_char_p(bytes(abg_file.name, 'utf-8')),
                                       jd,
                                       ctypes.c_int(obs_code))
-        self._coordinate = SkyCoord(predict.contents[0],
-                                    predict.contents[1], distance=predict.contents[5],
-                                    unit=(units.degree, units.degree, units.au),
-                                    obstime=_date)
+        self._coordinate = None
+        self._ra = predict.contents[0] * units.degree
+        self._dec = predict.contents[1] * units.degree
+        self._lon = predict.contents[6] * units.degree
+        self._lat = predict.contents[7] * units.degree
         self._dra = predict.contents[2] * units.arcsec
         self._ddec = predict.contents[3] * units.arcsec
         self._pa = predict.contents[4] * units.degree
         self._distance = predict.contents[5] * units.AU
         self._date = str(_date)
         self._time = _date
+        self._set_coordinates()
 
     def rate_of_motion(self, date=None):
         """

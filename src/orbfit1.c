@@ -33,6 +33,47 @@ set_mpc_dtheta(double d) {
 }
 
 /* Project KBO position onto tangent plane at a given time */
+void
+kbo3d_helio(PBASIS *pin,
+      OBSERVATION *obs,
+      double *xk)
+{
+  double        vk[3],dxk[7],dyk[7],dzk[7];
+  double        xe,ye,ze;
+  double        invz;
+  double        distance;
+  int           i;
+
+  /* Get the Earth position if not already calculated*/
+  if (obs->xe < -9.) {
+    earth3d(obs->obstime, obs->obscode, &xe,&ye,&ze);
+    obs->xe = xe;
+    obs->ye = ye;
+    obs->ze = ze;
+  } else {
+    xe = obs->xe;
+    ye = obs->ye;
+    ze = obs->ze;
+  }
+
+  /* Get preliminary KBO position */
+  kbo3d(pin,obs->obstime,
+        xk,vk,dxk,dyk,dzk);
+
+  /* At this point one should account for the light-travel time
+     delay between observed time and kbo orbit position time.
+     Calculate distance & time delay using naive position.
+  */
+  distance=sqrt( (xk[0]-xe)*(xk[0]-xe) + (xk[1]-ye)*(xk[1]-ye)
+                 + (xk[2]-ze)*(xk[2]-ze) );
+
+  kbo3d(pin,obs->obstime-distance/SPEED_OF_LIGHT,
+        xk,vk,dxk,dyk,dzk);
+
+}
+
+
+/* Project KBO position onto tangent plane at a given time */
 double
 kbo2d(PBASIS *pin, 
       OBSERVATION *obs,
@@ -515,17 +556,17 @@ predict_posn(PBASIS *pin,
 
   /*using input time & obscode, put xy position into OBSERVATION struct*/
   distance = kbo2d(pin,obs,
-	&(obs->thetax),dx,&(obs->thetay),dy);
+                   &(obs->thetax),dx,&(obs->thetay),dy);
 
   /* project the covariance matrix */
   /* skip if not desired */
   if (sigxy!=NULL && covar!=NULL) {
     sigxy[1][1]=sigxy[1][2]=sigxy[2][2]=0;
-    for (i=1; i<=6; i++) { 
+    for (i=1; i<=6; i++) {
       for (j=1; j<=6; j++) {
-	sigxy[1][1] += dx[i]*covar[i][j]*dx[j];
-	sigxy[1][2] += dx[i]*covar[i][j]*dy[j];
-	sigxy[2][2] += dy[i]*covar[i][j]*dy[j];
+        sigxy[1][1] += dx[i]*covar[i][j]*dx[j];
+        sigxy[1][2] += dx[i]*covar[i][j]*dy[j];
+        sigxy[2][2] += dy[i]*covar[i][j]*dy[j];
       }
     }
     sigxy[2][1]=sigxy[1][2];
