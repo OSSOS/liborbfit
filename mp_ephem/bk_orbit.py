@@ -14,6 +14,16 @@ from astropy.units.quantity import Quantity
 
 from .ephem import EphemerisReader, ObsRecord
 
+orig_bytes = bytes
+
+
+def bytes(str, encoding='utf-8'):
+    try:
+        return orig_bytes(str, encoding)
+    except TypeError:
+        return orig_bytes(str)
+
+
 __author__ = 'jjk'
 
 
