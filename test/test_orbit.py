@@ -19,7 +19,7 @@ class SimonFormat(unittest.TestCase):
     def test_fitradec(self):
         orbit = mp_ephem.BKOrbit(None, self.mpc_filename)
         orbit.predict(orbit.observations[0].date)
-        self.assertAlmostEqual(orbit.a.to('au').value, 43.8026798, 5)
+        self.assertAlmostEqual(orbit.a.to('au').value, 43.8026798, 3)
 
 
 class OrbitFit(unittest.TestCase):
