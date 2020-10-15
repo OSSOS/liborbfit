@@ -109,7 +109,7 @@ class BKOrbit(object):
         return self.r_mag
 
     def _fit_radec(self, randomize=False):
-        # call fit_radec with mpcfile and abgfile
+        # call fit_radec with mpc file and abgfile
         self.orbfit.fitradec.restype = ctypes.POINTER(ctypes.c_double * 2)
         self.orbfit.fitradec.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
         build_abg = True
@@ -118,9 +118,7 @@ class BKOrbit(object):
             _abg_file = open(self.abg_filename, 'r')
         if build_abg or randomize:
             _mpc_file = tempfile.NamedTemporaryFile(mode='w', suffix='.mpc')
-            if len(self.observations) < 3:
-                raise BKOrbitError()
-
+            _nobs = 0
             for observation in self.observations:
                 try:
                     if observation.null_observation:
@@ -129,6 +127,7 @@ class BKOrbit(object):
                     pass
                 assert isinstance(observation, ObsRecord)
                 obs = observation
+                _nobs += 1
                 self.name = obs.provisional_name
                 ra = obs.ra.replace(" ", ":")
                 dec = obs.dec.replace(" ", ":")
@@ -151,6 +150,8 @@ class BKOrbit(object):
                                                                     obs.location.y,
                                                                     obs.location.z))
 
+            if _nobs < 3:
+                raise BKOrbitError()
             _mpc_file.seek(0)
             if self.abg_filename is None:
                 _abg_file = tempfile.NamedTemporaryFile(mode='w+', suffix='.abg')
