@@ -117,7 +117,6 @@ class MinorPlanetNumber(object):
     def __format__(self, format_spec):
         return self.__str__()
 
-
     def __str__(self):
         if self._minor_planet_number is None:
             return ""
@@ -138,8 +137,8 @@ class MinorPlanetNumber(object):
     def __gt__(self, other):
         return int(self) > int(other)
 
-    def __cmp__(self, other):
-        return cmp(int(self), int(other))
+#    def __cmp__(self, other):
+#        return cmp(int(self), int(other))
 
     def __bool__(self):
         return self._minor_planet_number is not None
@@ -602,7 +601,8 @@ class ObsRecord(object):
         """
         struct_formats = {'mpc_format': '0s5s7s1s1s1s17s12s12s9x5s1s6x3s',
                           'ossos_format1': '1s4s7s1s1s1s17s12s12s9x5s1s6x3s',
-                          'ossos_format2': '1s0s11s1s1s1s17s12s12s9x5s1s6x3s'}
+                          'ossos_format2': '1s0s11s1s1s1s17s12s12s9x5s1s6x3s',
+                          'simon_format': '0s24s1s1s1s17s12s12s9x5s1s6x3s'}
 
         mpc_line = input_line.strip('\n')
         logging.debug("Trying to create MPC record from:\n{}".format(mpc_line))
