@@ -1555,6 +1555,7 @@ class EphemerisReader(object):
         for line in input_mpc_lines:
             line = line.rstrip()
             mpc_observation = ObsRecord.from_string(line)
+            logging.debug("Parsed line:\n{0}\n and got {1}".format(line, mpc_observation))
             if isinstance(mpc_observation, OSSOSComment):
                 next_comment = mpc_observation
                 continue

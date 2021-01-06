@@ -5,7 +5,22 @@ import unittest
 import mp_ephem
 from astropy import units, coordinates
 import os
+from mp_ephem.ephem import ObserverLocation
 
+
+class HSTFormat(unittest.TestCase):
+
+    def setUp(self):
+        self.mpc_filename = 'data/hst.mpc'
+
+    def test_parser(self):
+        obs = mp_ephem.EphemerisReader().read(self.mpc_filename)
+        self.assertIsInstance(obs[0].location, ObserverLocation)
+
+    def test_fitradec(self):
+        orbit = mp_ephem.BKOrbit(None, self.mpc_filename)
+        orbit.predict(orbit.observations[0].date)
+        self.assertAlmostEqual(orbit.a.to('au').value, 17.08, 0)
 
 class SimonFormat(unittest.TestCase):
 
