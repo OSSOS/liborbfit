@@ -31,12 +31,14 @@ double *fitradec(char *mpc_filename, char *abg_filename)
     return result ;
   }
 
-   /*
+  
+  /*
   for (i=0;i<nobs;i++) {
     fprintf(stderr, "%lf %d %lf %lf %lf\n", obsarray[i].obstime, obsarray[i].obscode,
             obsarray[i].xe, obsarray[i].ye, obsarray[i].ze);
   }
   */
+  
   /* Call subroutine to do the actual fitting: */
   fit_observations(obsarray, nobs, &p, covar, &chisq, &dof, NULL);
 
@@ -50,10 +52,10 @@ double *fitradec(char *mpc_filename, char *abg_filename)
   pbasis_to_bary(&p, &xv, NULL);
 
   orbitElements(&xv, &orbit);
-  /* fprintf(stderr, "# a=%f AU,e=%f,i=%f deg\n",orbit.a, orbit.e, orbit.i); */
+  fprintf(stderr, "# a=%f AU,e=%f,i=%f deg\n",orbit.a, orbit.e, orbit.i); 
   d = sqrt(xBary*xBary + yBary*yBary + pow(zBary-1/p.g,2.));
   dd = d*d*sqrt(covar[5][5]);
-  /* fprintf(stderr, "# Barycentric distance %.3f+-%.3f\n",d,dd); */
+  fprintf(stderr, "# Barycentric distance %.3f+-%.3f\n",d,dd); 
 
   /* Print the covariance matrix to the agb_file */
   /* write the covariance to the agbfile */
@@ -72,7 +74,6 @@ double *fitradec(char *mpc_filename, char *abg_filename)
   fclose(abg_file);
 
   /* Dump residuals to res_file */
-  /*
   res_file = stderr;
   fprintf(res_file,"Best fit orbit gives:\n");
   fprintf(res_file,"obs  time        x      x_resid       y   y_resid\n");
@@ -84,7 +85,6 @@ double *fitradec(char *mpc_filename, char *abg_filename)
 	    obsarray[i].thetax/ARCSEC, (obsarray[i].thetax-x)/ARCSEC,
 	    obsarray[i].thetay/ARCSEC, (obsarray[i].thetay-y)/ARCSEC);
   }
-  */
 
   free_dmatrix(covar,1,6,1,6);
   result[0] = d;
@@ -270,21 +270,19 @@ double *abg_to_aei(char *abg_file)
   dd = d*d*sqrt(covar_abg[5][5]);
 
   /* Print out the results, with comments */
-  /*
-  printf(aei_file,"# Barycentric osculating elements in ICRS at epoch %.1f:\n",jd0);
-  printf("#    a            e       i      Node   Arg of Peri   Time of Peri\n");
-  printf("%12.6f  %9.6f  %8.3f %8.3f  %8.3f %11.3f\n",
+  fprintf(stderr,"# Barycentric osculating elements in ICRS at epoch %.1f:\n",jd0);
+  fprintf(stderr,"#    a            e       i      Node   Arg of Peri   Time of Peri\n");
+  fprintf(stderr,"%12.6f  %9.6f  %8.3f %8.3f  %8.3f %11.3f\n",
   	 orbit.a, orbit.e, orbit.i, orbit.lan, orbit.aop, orbit.T);
-  fprintf("+-%10.6f  %9.6f  %8.3f %8.3f  %8.3f %11.3f\n",
+  fprintf(stderr,"+-%10.6f  %9.6f  %8.3f %8.3f  %8.3f %11.3f\n",
      sqrt(covar_aei[1][1]),
   	 sqrt(covar_aei[2][2]),
   	 sqrt(covar_aei[3][3])/DTOR,
      sqrt(covar_aei[4][4])/DTOR,
 	 sqrt(covar_aei[5][5])/DTOR,
 	 sqrt(covar_aei[6][6])/DAY);
-  fprintf("# covariance matrix:\n");
-  fprint_matrix(stdout,covar_aei,6,6);
-  */
+  fprintf(stderr,"# covariance matrix:\n");
+  print_matrix(stderr,covar_aei,6,6);
   result[0] = orbit.a;
   result[1] = orbit.e;
   result[2] = orbit.i;
