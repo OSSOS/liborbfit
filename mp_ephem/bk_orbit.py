@@ -38,7 +38,7 @@ class BKOrbit(object):
     This class provides orbital information derived by calling 'fit_radec'.
     """
 
-    def __init__(self, observations, ast_filename=None, abg_file=None):
+    def __init__(self, observations, ast_filename=None, abg_file=None, randomize=False):
         """
         Given a list of mpc.Observations, compute the orbit using fit_radec and provide methods for
         accessing that orbit.
@@ -66,6 +66,7 @@ class BKOrbit(object):
         if ast_filename is None:
             assert isinstance(observations, tuple) or isinstance(observations, list) or isinstance(observations,
                                                                                                    numpy.ndarray)
+        self.randomize = randomize
         self._observations = observations
         self._r_mag = None
         self.abg_filename = abg_file
@@ -118,7 +119,8 @@ class BKOrbit(object):
     def mag(self):
         return self.r_mag
 
-    def _fit_radec(self, randomize=False):
+    def _fit_radec(self):
+        randomize = self.randomize
         # call fit_radec with mpc file and abgfile
         self.orbfit.fitradec.restype = ctypes.POINTER(ctypes.c_double * 2)
         self.orbfit.fitradec.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
