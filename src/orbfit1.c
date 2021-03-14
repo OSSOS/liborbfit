@@ -111,7 +111,10 @@ kbo2d(PBASIS *pin,
 
   kbo3d(pin,obs->obstime-distance/SPEED_OF_LIGHT, 
 	xk,vk,dxk,dyk,dzk);
- 
+
+  distance=sqrt( (xk[0]-xe)*(xk[0]-xe) + (xk[1]-ye)*(xk[1]-ye)
+		 + (xk[2]-ze)*(xk[2]-ze) );
+
   invz = 1./(xk[2]-ze);
   *x = (xk[0] - xe)*invz;
   *y = (xk[1] - ye)*invz;
@@ -213,6 +216,7 @@ int scan_observation(char *inbuff, OBSERVATION *obs, OBSERVATION *previous)
   double jd;
   extern double dmsdeg(char *string);
   extern double hmsdeg(char *string);
+  FILE *logFile;
   /* get date to see which format this is */
   /* For an MPC format the first field will have non-numeric characters*/
   jd = strtod(inbuff, &endptr);
@@ -220,7 +224,7 @@ int scan_observation(char *inbuff, OBSERVATION *obs, OBSERVATION *previous)
     /* See if this is perhaps in MPC format */
     struct date_time dd;
     if (sscanf(inbuff+15,"%d %d %f",&(dd.y),&(dd.mo),&(dd.d))!=3) {
-      fprintf(stderr,"Format error in observation file:\n ->%s\n",inbuff);
+      fprintf(logFile,"Format error in observation file:\n ->%s\n",inbuff);
       return(1);
     }
     dd.h = dd.mn = dd.s = 0.;
@@ -258,11 +262,11 @@ int scan_observation(char *inbuff, OBSERVATION *obs, OBSERVATION *previous)
                      &(obs->obscode)) != 5) {
               fprintf(stderr, "Format error in observation file:\n ->%s\n", inbuff);
               return (1);
-          }
+	  }
       } else {
-          /* Convert strings to ra & dec */
-          /* fprintf(stderr,"%s -> %lf %lf %lf\n", inbuff, obs->xe, obs->ye, obs->ze); */
+      /* Convert strings to ra & dec */
           obs->obstime = jd;
+	  obs->obscode = 250;
           obs->thetax = DTOR * hmsdeg(rastring);
           obs->thetay = DTOR * dmsdeg(decstring);
           obs->dthetax = obs->dthetay = obs->dthetay * ARCSEC;
@@ -309,23 +313,21 @@ read_radec(OBSERVATION obsarray[], char *fname, int *nobs)
     // obs refers to the previous observation, after the first loop.
     scan_status_flag = scan_observation(inbuff, &(obsarray[*nobs]), obs);
 
-    // scanned line was 2nd line of two line format so don't advance nobs as all we did was reset the observer x/y
-    if (scan_status_flag == -1) {
-      mpc3d(obs->obstime, &(obs->xe), &(obs->ye), &(obs->ze));
-      continue;
-    }
-
     // all other non-zero status values indicate an error.
     if ( scan_status_flag == 1) {
       fprintf(stderr,"Quitting on format error\n");
       exit(1);
     }
 
+    if ( scan_status_flag == -1 ) {
+      mpc3d(obs->obstime, &(obs->xe), &(obs->ye), &(obs->ze));
+      continue;
+    }
+
     obs = &(obsarray[*nobs]);
     (*nobs)++;
 
     eq_to_ec(obs->thetax,obs->thetay,&elat,&elon,NULL);
-
 
     if (*nobs==1) {
       double xec, yec, zec;
@@ -355,9 +357,11 @@ read_radec(OBSERVATION obsarray[], char *fname, int *nobs)
 	       lat0,lon0,NULL);
     /* Calculate the position of Earth at this time to avoid doing
      * it many times later: */
-    if (scan_status_flag == -2) {
+    /* scanned line had x/y/z/ locaiton of observatory */
+    if (scan_status_flag == -2 ) {
       mpc3d(obs->obstime, &(obs->xe), &(obs->ye), &(obs->ze));
-    } else {
+    }
+    if (scan_status_flag == 0 ) {
       earth3d(obs->obstime, obs->obscode,
               &(obs->xe), &(obs->ye), &(obs->ze));
     }

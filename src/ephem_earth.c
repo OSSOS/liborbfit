@@ -151,7 +151,7 @@ void Read_Coefficients( double Time )
   T_span = T_end - T_beg;
 
   if (Time < T_beg || Time > T_end) {
-    fprintf(stderr,"JD %.2f is out of range of ephemeris file\n",Time);
+    fprintf(stderr,"JD %.2lf is out of range of ephemeris file\n",Time);
     exit(1);
   }
   /*--------------------------------------------------------------------------*/
