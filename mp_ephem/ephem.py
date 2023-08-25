@@ -13,6 +13,7 @@ from astropy import units
 from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.time import Time
+from astropy.units import Quantity
 
 __author__ = 'jjk, mtb55'
 
@@ -461,7 +462,9 @@ class ObsRecord(object):
                  ypos=None,
                  frame=None,
                  plate_uncertainty=None,
-                 astrometric_level=0):
+                 astrometric_level=0,
+                 likelihood=None,
+                 survey_code='O'):
         """
 
         :param provisional_name:
@@ -481,6 +484,7 @@ class ObsRecord(object):
         :param frame:
         :param plate_uncertainty:
         :param null_observation:
+        :param likelihood: is this a real detections? scale value
 
         """
         self._null_observation = False
@@ -515,7 +519,9 @@ class ObsRecord(object):
         self.observatory_code = observatory_code
         self._comment = None
         self.location = None
-        self.comment = OSSOSComment(version="O", frame=frame,
+        self.likelihood = likelihood
+        self.comment = OSSOSComment(version=survey_code,
+                                    frame=frame,
                                     source_name=provisional_name,
                                     photometry_note="",
                                     mpc_note=str(self.note1),
@@ -525,6 +531,7 @@ class ObsRecord(object):
                                     astrometric_level=astrometric_level,
                                     magnitude=mag,
                                     mag_uncertainty=mag_err,
+                                    likelihood=self.likelihood,
                                     comment=comment)
 
     def __eq__(self, other):
@@ -1047,6 +1054,7 @@ class OSSOSComment(object):
                  astrometric_level=0,
                  magnitude=None,
                  mag_uncertainty=None,
+                 likelihood=None,
                  comment=None):
         self.version = version
         self._frame = None
@@ -1065,6 +1073,7 @@ class OSSOSComment(object):
         self.mag_uncertainty = mag_uncertainty
         self._plate_uncertainty = None
         self._astrometric_level = 0
+        self.likelihood = likelihood
         try:
             self.plate_uncertainty = plate_uncertainty
             self.astrometric_level = astrometric_level
@@ -1317,6 +1326,8 @@ class OSSOSComment(object):
         comm += self.to_str('{:1d}', self.astrometric_level, "-")
         comm += self.to_str('{:5.2f}', self.mag, "-" * 5)
         comm += self.to_str('{:4.2f}', self.mag_uncertainty, "-" * 4)
+        if self.likelihood is not None:
+            comm += self.to_str('{:4d}', int(numpy.floor(self.likelihood)), '-'*4)
         comm += ' % {}'.format(self.comment)
 
         return comm
