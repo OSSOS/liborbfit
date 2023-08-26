@@ -4,7 +4,7 @@ import numpy
 import re
 import time
 import six
-from astropy._erfa import d2dtf, dtf2d
+from erfa import d2dtf, dtf2d
 from astropy.time import TimeString
 
 
