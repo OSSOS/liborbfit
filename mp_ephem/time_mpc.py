@@ -126,9 +126,8 @@ class TimeMPC(TimeString):
             if has_yday:
                 yday = datetime(iy, im, id).timetuple().tm_yday
 
-            fracday = (((((ifracsec / 1000000.0 + isec) / 60.0 + imin) / 60.0) + ihr) / 24.0) * (10 ** 6)
-            fracday = '{0:06g}'.format(fracday)[0:self.precision]
-
+            fracday = (((((ifracsec / 10**self.precision + isec) / 60.0 + imin) / 60.0) + ihr) / 24.0)
+            fracday = f'{fracday:f}'.split('.')[1][0:self.precision]
             yield {'year': int(iy), 'mon': int(im), 'day': int(id),
                    'hour': int(ihr), 'min': int(imin), 'sec': int(isec),
                    'fracsec': int(ifracsec), 'yday': yday, 'fracday': fracday}
