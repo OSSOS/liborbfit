@@ -6,7 +6,7 @@ Wes Fraser and Michele Bannister with more smarty pants stuff added by JJ Kavela
 import copy
 import re
 import requests
-import scipy
+from numpy import interp
 import logging
 
 from astropy.coordinates import SkyCoord
@@ -59,7 +59,7 @@ class Query(object):
                                'ANG_FORMAT': "'DEG'",
                                'CENTER': "'568@399'",
                                'START_TIME': "'JD {}'".format(Time.now()),
-                               'STOP_TIME': "'JD {}'".format(Time.now() + 10*units.day),
+                               'STOP_TIME': "'JD {}'".format(Time.now() + 10 * units.day),
                                'STEP_SIZE': "'{} {}'".format(1, 'd'),
                                'QUANTITIES': None,
                                'REF_SYSTEM': "'J2000'",
@@ -322,9 +322,9 @@ class Body(object):
     def __call__(self, keyword, **kwargs):
         if keyword not in self.ephemeris.colnames:
             raise KeyError("Requested column {} does not in: {}".format(keyword, self.ephemeris.colnames))
-        return scipy.interp(self.current_time.jd,
-                            self.ephemeris['Time'].jd,
-                            self.ephemeris[keyword])
+        return interp(self.current_time.jd,
+                      self.ephemeris['Time'].jd,
+                      self.ephemeris[keyword])
 
     @property
     def elongation(self):
@@ -333,10 +333,9 @@ class Body(object):
         S-O-T /r
         :return:
         """
-        return scipy.interp(self.current_time.jd,
-                            self.ephemeris['Time'].jd,
-                            self.ephemeris['S-O-T']) * units.degree
-
+        return interp(self.current_time.jd,
+                      self.ephemeris['Time'].jd,
+                      self.ephemeris['S-O-T']) * units.degree
 
     @property
     def start_time(self):
@@ -378,13 +377,13 @@ class Body(object):
                 if start_of_failure in line:
                     fail_idx = idx
                     break
-            msg = fail_idx is None and self.data or self.data[fail_idx-2]
+            msg = fail_idx is None and self.data or self.data[fail_idx - 2]
             logging.error(msg)
             raise ValueError(msg, "failed to build ephemeris")
 
         # the header of the CSV structure is 2 lines before the start_of_ephmeris
         csv_lines = [str(self.data[start_idx - 2], 'utf-8')]
-        for l in self.data[start_idx+1:end_idx]:
+        for l in self.data[start_idx + 1:end_idx]:
             line = str(l, 'utf-8')
             csv_lines.append(line)
         csv = Csv()
@@ -493,7 +492,7 @@ class Body(object):
         @return: the time of the current ra/dec/rates selected from the ephmeris.
         """
         if self._current_time is None:
-            self.current_time = self.stop_time + (self.stop_time - self.start_time)/2.0
+            self.current_time = self.stop_time + (self.stop_time - self.start_time) / 2.0
         return self._current_time
 
     @current_time.setter
@@ -501,9 +500,9 @@ class Body(object):
         self._current_time = Time(current_time, scale='utc')
         if not (self.stop_time >= self.current_time >= self.start_time):
             logging.info("Resetting the ephemeris time boundaries")
-            self._start_time = Time(self.current_time - 10.0*units.minute)
-            self._stop_time = Time(self.current_time + 10.0*units.minute)
-            self.step_size = 5*units.minute
+            self._start_time = Time(self.current_time - 10.0 * units.minute)
+            self._stop_time = Time(self.current_time + 10.0 * units.minute)
+            self.step_size = 5 * units.minute
             self._reset()
 
     @property
@@ -514,12 +513,12 @@ class Body(object):
         @rtype: SkyCoord
         """
 
-        ra = scipy.interp(self.current_time.jd,
-                          self.ephemeris['Time'].jd,
-                          self.ephemeris['R.A._(ICRF/J2000.0)']) * units.degree
-        dec = scipy.interp(self.current_time.jd,
-                           self.ephemeris['Time'].jd,
-                           self.ephemeris['DEC_(ICRF/J2000.0)']) * units.degree
+        ra = interp(self.current_time.jd,
+                    self.ephemeris['Time'].jd,
+                    self.ephemeris['R.A._(ICRF/J2000.0)']) * units.degree
+        dec = interp(self.current_time.jd,
+                     self.ephemeris['Time'].jd,
+                     self.ephemeris['DEC_(ICRF/J2000.0)']) * units.degree
         distance = 40 * units.au
         return SkyCoord(ra, dec, distance=distance)
 
@@ -531,9 +530,9 @@ class Body(object):
         @rtype: Quantity angle/time
         """
 
-        ra_rate = scipy.interp(self.current_time.jd,
-                               self.ephemeris['Time'].jd,
-                               self.ephemeris['dRA*cosD']) * units.arcsec / units.hour
+        ra_rate = interp(self.current_time.jd,
+                         self.ephemeris['Time'].jd,
+                         self.ephemeris['dRA*cosD']) * units.arcsec / units.hour
 
         return ra_rate
 
@@ -545,9 +544,9 @@ class Body(object):
         @rtpye: Quantity  angle/time
         """
 
-        dec_rate = scipy.interp(self.current_time.jd,
-                                self.ephemeris['Time'].jd,
-                                self.ephemeris['d(DEC)/dt']) * units.arcsec / units.hour
+        dec_rate = interp(self.current_time.jd,
+                          self.ephemeris['Time'].jd,
+                          self.ephemeris['d(DEC)/dt']) * units.arcsec / units.hour
 
         return dec_rate
 
@@ -559,9 +558,9 @@ class Body(object):
         @rtpye: Quantity  angle
         """
 
-        dra = scipy.interp(self.current_time.jd,
-                           self.ephemeris['Time'].jd,
-                           self.ephemeris['RA_3sigma']) * units.arcsec
+        dra = interp(self.current_time.jd,
+                     self.ephemeris['Time'].jd,
+                     self.ephemeris['RA_3sigma']) * units.arcsec
 
         return dra
 
@@ -570,18 +569,18 @@ class Body(object):
         """
         Visual magnitude of the source.
         """
-        return scipy.interp(self.current_time.jd,
-                            self.ephemeris['Time'].jd,
-                            self.ephemeris['APmag'])
+        return interp(self.current_time.jd,
+                      self.ephemeris['Time'].jd,
+                      self.ephemeris['APmag'])
 
     @property
     def alpha(self):
         """
         Phase angle.
         """
-        return scipy.interp(self.current_time.jd,
-                            self.ephemeris['Time'].jd,
-                            self.ephemeris['phi']) * units.degree
+        return interp(self.current_time.jd,
+                      self.ephemeris['Time'].jd,
+                      self.ephemeris['phi']) * units.degree
 
     @property
     def ddec(self):
@@ -590,9 +589,9 @@ class Body(object):
 
         @rtype: Quantity  angle
         """
-        return scipy.interp(self.current_time.jd,
-                            self.ephemeris['Time'].jd,
-                            self.ephemeris['DEC_3sigma']) * units.arcsec
+        return interp(self.current_time.jd,
+                      self.ephemeris['Time'].jd,
+                      self.ephemeris['DEC_3sigma']) * units.arcsec
 
     @property
     def pa(self):
@@ -601,9 +600,9 @@ class Body(object):
 
         @rtype: Quantity
         """
-        return scipy.interp(self.current_time.jd,
-                            self.ephemeris['Time'].jd,
-                            self.ephemeris['Theta']) * units.degree
+        return interp(self.current_time.jd,
+                      self.ephemeris['Time'].jd,
+                      self.ephemeris['Theta']) * units.degree
 
     def predict(self, current_time):
         """
@@ -690,10 +689,9 @@ class Body(object):
         Distance from Observer to Target
         :return:
         """
-        return scipy.interp(self.current_time.jd,
-                            self.ephemeris['Time'].jd,
-                            self.ephemeris['delta']) * units.au
+        return interp(self.current_time.jd,
+                      self.ephemeris['Time'].jd,
+                      self.ephemeris['delta']) * units.au
 
 
 Ephmeris = Body
-
