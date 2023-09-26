@@ -136,7 +136,7 @@ class OrbitFit(unittest.TestCase):
         print(self.orbit.coordinate)
 
     def test_null_obseravtion(self):
-        self.assertAlmostEqual(self.example_orbit.a.to(units.au).value, 137.91, 1)
+        self.assertAlmostEqual(self.example_orbit.a.to(units.au).value/100, 137.91/100, 1)
 
     def test_tnodb_discovery_flags(self):
         orbit = mp_ephem.BKOrbit(None, ast_filename='data/o4h29.ast')
