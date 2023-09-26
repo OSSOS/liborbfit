@@ -2,6 +2,7 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
+import io
 import logging
 import os
 import re
@@ -1527,12 +1528,12 @@ class EphemerisReader(object):
         self.filename = filename
         # can be a file like objects,
 
-        input_mpc_lines = None
         while True:
-            try:
-                filehandle = open(filename, "r")
-            except:
-                filehandle = filename
+            filehandle = self.filename
+            if isinstance(filehandle, str):
+                filehandle = open(filehandle, "r")
+            if not isinstance(filehandle, io.IOBase):
+                raise IOError("Failed to open file: {}".format(self.filename))
 
             try:
                 input_mpc_lines = filehandle.read().split('\n')

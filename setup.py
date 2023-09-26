@@ -5,9 +5,9 @@ from mp_ephem import __version__
 
 version = __version__.version
 
-dependencies = ['astropy >= 1.0',
+dependencies = ['astropy >= 1.0', 'pyerfa',
                 'numpy >= 1.6.1',
-                'six', 'requests', 'scipy']
+                'requests', 'scipy']
 
 sources = [x for x in glob.glob('src/*.c')]
 

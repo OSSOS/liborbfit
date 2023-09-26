@@ -3,8 +3,7 @@ from datetime import datetime
 import numpy
 import re
 import time
-import six
-from astropy._erfa import d2dtf, dtf2d
+from erfa import d2dtf, dtf2d
 from astropy.time import TimeString
 
 
@@ -72,7 +71,7 @@ class TimeMPC(TimeString):
             fracday = float(fracday)
 
         for _, strptime_fmt_or_regex, _ in subfmts:
-            if isinstance(strptime_fmt_or_regex, six.string_types):
+            if isinstance(strptime_fmt_or_regex, str):
                 try:
                     tm = time.strptime(timestr, strptime_fmt_or_regex)
                 except ValueError as ex:
@@ -90,7 +89,7 @@ class TimeMPC(TimeString):
                     continue
                 tm = tm.groupdict()
                 vals = [int(tm.get(component, default)) for component, default
-                        in six.moves.zip(components, defaults)]
+                        in zip(components, defaults)]
 
                 hrprt = int(24 * fracday)
                 vals.append(hrprt)

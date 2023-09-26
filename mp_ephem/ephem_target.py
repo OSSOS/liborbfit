@@ -1,5 +1,3 @@
-
-import six
 import json
 
 from astropy import units
@@ -15,7 +13,8 @@ def create_astrores_document():
     doctype = implementation.createDocumentType('ASTRO',
                                                 None,
                                                 "http://vizier.u-strasbg.fr/xml/astrores.dtd")
-    dom = implementation.createDocument("http://vizier.u-strasbg.fr/doc/astrores.htx", "ASTRO", doctype)
+    dom = implementation.createDocument("http://vizier.u-strasbg.fr/doc/astrores.htx",
+                                        "ASTRO", doctype)
     dom.getElementsByTagName("ASTRO")[0].setAttribute("ID", "v0.8")
     dom.getElementsByTagName("ASTRO")[0].setAttribute("xmlns:ASTRO", "http://vizier.u-strasbg.fr/doc/astrores.htx")
     assert isinstance(dom, minidom.Document)
@@ -34,7 +33,7 @@ class EphemTarget(object):
 
     def __init__(self, name, column_separator=COLUMN_SEPARATOR, ephem_format='CFHT ET', runid='16BP06'):
         """
-        create an ephmeris target, either with a 'orbfit' object or some mean rate of motion.
+        create an ephemeris target, either with a 'orbfit' object or some mean rate of motion.
 
         :param name: a string containing the name of the target.
         """
@@ -63,7 +62,7 @@ class EphemTarget(object):
         fields = self.fields
         self.field_names = ["DATE_UTC", "RA_J2000", "DEC_J2000"]
 
-        for (key, value) in six.iteritems(nodes):
+        for (key, value) in nodes.items():
             element = self.doc.createElement(key)
             element.appendChild(self.doc.createTextNode(value))
             table.appendChild(element)
@@ -75,7 +74,7 @@ class EphemTarget(object):
         for fieldName in self.field_names:
             field = self.doc.createElement("FIELD")
             field.setAttribute("name", fieldName)
-            for (key, value) in six.iteritems(fields[fieldName]['attr']):
+            for (key, value) in fields[fieldName]['attr'].items():
                 field.setAttribute(key, value)
             description = self.doc.createElement("DESCRIPTION")
             description.appendChild(self.doc.createTextNode(fields[fieldName]['DESCRIPTION']))
