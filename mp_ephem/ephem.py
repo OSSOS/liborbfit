@@ -14,6 +14,7 @@ from astropy import units
 from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.time import Time
+from astropy.units import Quantity
 
 __author__ = 'jjk, mtb55'
 
@@ -462,7 +463,9 @@ class ObsRecord(object):
                  ypos=None,
                  frame=None,
                  plate_uncertainty=None,
-                 astrometric_level=0):
+                 astrometric_level=0,
+                 likelihood=None,
+                 survey_code='O'):
         """
 
         :param provisional_name:
@@ -482,6 +485,7 @@ class ObsRecord(object):
         :param frame:
         :param plate_uncertainty:
         :param null_observation:
+        :param likelihood: is this a real detections? scale value
 
         """
         self._null_observation = False
@@ -516,7 +520,9 @@ class ObsRecord(object):
         self.observatory_code = observatory_code
         self._comment = None
         self.location = None
-        self.comment = OSSOSComment(version="O", frame=frame,
+        self.likelihood = likelihood
+        self.comment = OSSOSComment(version=survey_code,
+                                    frame=frame,
                                     source_name=provisional_name,
                                     photometry_note="",
                                     mpc_note=str(self.note1),
@@ -526,6 +532,7 @@ class ObsRecord(object):
                                     astrometric_level=astrometric_level,
                                     magnitude=mag,
                                     mag_uncertainty=mag_err,
+                                    likelihood=self.likelihood,
                                     comment=comment)
 
     def __eq__(self, other):
@@ -1048,6 +1055,7 @@ class OSSOSComment(object):
                  astrometric_level=0,
                  magnitude=None,
                  mag_uncertainty=None,
+                 likelihood=None,
                  comment=None):
         self.version = version
         self._frame = None
@@ -1066,6 +1074,7 @@ class OSSOSComment(object):
         self.mag_uncertainty = mag_uncertainty
         self._plate_uncertainty = None
         self._astrometric_level = 0
+        self.likelihood = likelihood
         try:
             self.plate_uncertainty = plate_uncertainty
             self.astrometric_level = astrometric_level
@@ -1104,13 +1113,14 @@ class OSSOSComment(object):
         if len(values) > 1:
             comment_string = values[1].lstrip(' ')
         # O 1631355p21 O13AE2O     Z  1632.20 1102.70 0.21 3 ----- ---- % Apcor failure.
-        ossos_comment_format = '1s1x12s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
-        old_ossos_comment_format = '1s1x10s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
-        bad_ossos_comment_format = '1s3x10s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
+        ossos_comment_format      = '1s1x12s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
+        old_ossos_comment_format  = '1s1x10s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
+        bad_ossos_comment_format  = '1s3x10s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
         orig_ossos_comment_format = '1s1x10s1x8s1x1s1s1x6s1x6s1x5s1x4s1x4s1x'
+        classy_comment_format     = '1s1x10s1x8s1x1s1s1x6s1x6s1x5s1x4s1x4s1x4s1x'
 
         for struct_ in [ossos_comment_format, old_ossos_comment_format, bad_ossos_comment_format,
-                        orig_ossos_comment_format]:
+                        orig_ossos_comment_format, classy_comment_format]:
             try:
                 logging.debug("Parsing using structure: {}".format(struct_))
                 args = [str(arg, 'utf-8') for arg in struct.unpack(struct_, bytes(values[0], 'utf-8'))]
@@ -1125,11 +1135,12 @@ class OSSOSComment(object):
         values = values[0].split()
         # O 1645236p27 L3UV Y 106.35 4301.85 0.20 0 24.31 0.15
         try:
-            if values[0] != 'O' or len(values) < 6:
+            if (values[0] != 'O' and values[0] != 'C') or len(values) < 6:
                 # this is NOT and OSSOS style comment string
-                raise ValueError("Can't parse non-OSSOS style comment: {}".format(comment))
+                raise ValueError("Can't parse non-OSSOS/CLASSY style comment: {}".format(comment))
             # first build a comment based on the required fields.
-            retval = cls(version="O",
+            likelihood = values[0] == 'C' and float(values[-1]) or None
+            retval = cls(version=values[0],
                          frame=values[1].strip(),
                          source_name=values[2].strip(),
                          photometry_note=values[3][0].strip(),
@@ -1140,6 +1151,7 @@ class OSSOSComment(object):
                          astrometric_level=len(values) > 7 and int(values[7]) or None,
                          magnitude=len(values) > 8 and float(values[8]) or None,
                          mag_uncertainty=len(values) > 9 and float(values[9]) or None,
+                         likelihood=likelihood,
                          comment=comment_string.strip())
         except Exception as e:
             logging.debug(values)
@@ -1318,6 +1330,8 @@ class OSSOSComment(object):
         comm += self.to_str('{:1d}', self.astrometric_level, "-")
         comm += self.to_str('{:5.2f}', self.mag, "-" * 5)
         comm += self.to_str('{:4.2f}', self.mag_uncertainty, "-" * 4)
+        if self.likelihood is not None:
+            comm += self.to_str('{:4d}', int(numpy.floor(self.likelihood)), '-'*4)
         comm += ' % {}'.format(self.comment)
 
         return comm
