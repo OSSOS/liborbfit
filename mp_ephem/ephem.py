@@ -2,6 +2,7 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
+import io
 import logging
 import os
 import re
@@ -13,7 +14,7 @@ from astropy import units
 from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.time import Time
-from astropy.units import Quantity
+# from astropy.units import Quantity
 
 __author__ = 'jjk, mtb55'
 
@@ -197,7 +198,7 @@ class TNOdbFlags(object):
     """
 
     def __init__(self, flags):
-        if not re.match("\d{12}", flags):
+        if not re.match(r'\d{12}', flags):
             raise ValueError("illegal flag string: {}".format(flags))
         self.__flags = flags
 
@@ -416,6 +417,7 @@ def compute_precision(coord):
         precision = len(coord) - idx - 1
     return precision
 
+
 def get_date(date_string):
     """
     Given an MPC formatted time string return a Time object.
@@ -587,7 +589,7 @@ class ObsRecord(object):
                          observatory_code=args['observatory_code'])
 
     @classmethod
-    def from_string(cls, input_line):
+    def from_string(cls, input_line):  # noqa: C901
         """
         Given an MPC formatted line, returns an MPC ObsRecord object.
 
@@ -1043,7 +1045,7 @@ class MPCComment(object):
 
 class OSSOSComment(object):
     """
-    Parses an OSSOS observation's metadata into a format that can be stored in the 
+    Parses an OSSOS observation's metadata into a format that can be stored in the
     an ObsRecord.comment and written out in the same MPC line.
 
     Specification: '1s1x12s1x11s1x2s1x7s1x7s1x4s1x1s1x5s1x4s1x'
@@ -1077,7 +1079,8 @@ class OSSOSComment(object):
         try:
             self.plate_uncertainty = plate_uncertainty
             self.astrometric_level = astrometric_level
-        except:
+        except Exception as ex:
+            logging.debug(f"Failed while setting astrometric level (using default) {ex}")
             self.plate_uncertainty = 0.2
             self.mag = plate_uncertainty
             self.mag_uncertainty = astrometric_level
@@ -1092,13 +1095,13 @@ class OSSOSComment(object):
         return str(self) != str(other)
 
     def __le__(self, other):
-        raise NotImplemented
+        raise NotImplementedError
 
     def __ge__(self, other):
-        raise NotImplemented
+        raise NotImplementedError
 
     @classmethod
-    def from_string(cls, comment):
+    def from_string(cls, comment):  # noqa: C901
         """
         Build an MPC Comment from a string.
         """
@@ -1112,11 +1115,11 @@ class OSSOSComment(object):
         if len(values) > 1:
             comment_string = values[1].lstrip(' ')
         # O 1631355p21 O13AE2O     Z  1632.20 1102.70 0.21 3 ----- ---- % Apcor failure.
-        ossos_comment_format      = '1s1x12s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
-        old_ossos_comment_format  = '1s1x10s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
-        bad_ossos_comment_format  = '1s3x10s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
+        ossos_comment_format = '1s1x12s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
+        old_ossos_comment_format = '1s1x10s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
+        bad_ossos_comment_format = '1s3x10s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
         orig_ossos_comment_format = '1s1x10s1x8s1x1s1s1x6s1x6s1x5s1x4s1x4s1x'
-        classy_comment_format     = '1s1x10s1x8s1x1s1s1x6s1x6s1x5s1x4s1x4s1x4s1x'
+        classy_comment_format = '1s1x10s1x8s1x1s1s1x6s1x6s1x5s1x4s1x4s1x4s1x'
 
         for struct_ in [ossos_comment_format, old_ossos_comment_format, bad_ossos_comment_format,
                         orig_ossos_comment_format, classy_comment_format]:
@@ -1203,7 +1206,8 @@ class OSSOSComment(object):
             self.photometry_note = "Y"
             if not 15 < self._mag < 30:
                 raise ValueError("Magnitude out of reasonable range:  15 < mag < 30")
-        except:
+        except Exception as ex:
+            logging.debug(f"Failed while setting photometer (using default) {ex}")
             self.photometry_note = "Z"
             self._mag = None
 
@@ -1238,7 +1242,8 @@ class OSSOSComment(object):
     def astrometric_level(self, astrometric_level):
         try:
             astrometric_level = int(astrometric_level)
-        except:
+        except Exception as ex:
+            logging.debug(f"Failed while setting astrometric level (using default) {ex}")
             astrometric_level = 0
         if not -1 < astrometric_level < 10:
             raise ValueError("Astrometric level must be integer between 0 and 9.")
@@ -1393,7 +1398,8 @@ class MPCWriter(object):
         assert isinstance(mpc_observation, ObsRecord)
         try:
             key = mpc_observation.comment.frame.strip()
-        except:
+        except Exception as ex:
+            logging.debug(f"setting key using date as frame failed {ex}")
             key = mpc_observation.date.mjd
 
         try:
@@ -1489,7 +1495,7 @@ class EphemerisWriter(object):
     def __init__(self, format='votable'):
         """Only does VOtable for now."""
         self._columns = ['minor_planet_number', 'provisional_name', 'discovery', 'note1', 'note2', 'date',
-                    'ra', 'dec', 'mag', 'mag_err', 'observatory_code', 'comment']
+                         'ra', 'dec', 'mag', 'mag_err', 'observatory_code', 'comment']
 
     def write(self, filename, obs_records):
         """
@@ -1530,7 +1536,7 @@ class EphemerisReader(object):
             self.filename = filename
             self.mpc_observations = self.read(filename)
 
-    def read(self, filename):
+    def read(self, filename):  # noqa: C901
         """
         Read  MPC records from filename:
 
@@ -1541,12 +1547,12 @@ class EphemerisReader(object):
         self.filename = filename
         # can be a file like objects,
 
-        input_mpc_lines = None
         while True:
-            try:
-                filehandle = open(filename, "r")
-            except:
-                filehandle = filename
+            filehandle = self.filename
+            if isinstance(filehandle, str):
+                filehandle = open(filehandle, "r")
+            if not isinstance(filehandle, io.IOBase):
+                raise IOError("Failed to open file: {}".format(self.filename))
 
             try:
                 input_mpc_lines = filehandle.read().split('\n')
@@ -1765,7 +1771,6 @@ class TNOdbComment(object):
         date = line[15:23].strip()
         flags = line[24:34].strip()
         comment = line[56:].strip()
-        this = cls(index, date, flags)
         logging.debug("Got TNOdb parts: date: {} flags: {} comment: {}".format(date, flags, comment))
         comment_object = None
         # try build a comment object based on the TNOdb comment string

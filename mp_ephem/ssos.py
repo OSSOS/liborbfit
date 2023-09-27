@@ -229,7 +229,8 @@ class _SSOSParamDictBuilder(object):
         if not self.orbit_method == 'bern':
             try:
                 error_ellipse = float(error_ellipse)
-            except:
+            except Exception as ex:
+                logging.debug(ex)
                 error_ellipse = ''
         self._error_ellipse = error_ellipse
 
@@ -357,20 +358,21 @@ class Query(object):
 
 
 def query(mpc_observations_or_target_name, search_start_date=None, search_end_date=None):
-        """Send a query to the SSOS web service, looking for available observations using the given track.
+    """Send a query to the SSOS web service, looking for available observations using the given track.
 
-        :return: an Table object
-        :rtype: Table
-        """
+    :return: an Table object
+    :rtype: Table
+    """
 
-        if search_start_date is None:
-            search_start_date = Time('1999-01-01', scale='utc')
-        if search_end_date is None:
-            search_end_date = Time(datetime.datetime.now().strftime('%Y-%m-%d'), scale='utc')
-        logging.info("Sending query to SSOS start_date: {} end_data: {}\n".format(search_start_date, search_end_date))
-        return _SSOSParser().parse(Query(mpc_observations_or_target_name,
-                                         search_start_date=search_start_date,
-                                         search_end_date=search_end_date).get())
+    if search_start_date is None:
+        search_start_date = Time('1999-01-01', scale='utc')
+    if search_end_date is None:
+        search_end_date = Time(datetime.datetime.now().strftime('%Y-%m-%d'), scale='utc')
+    logging.info("Sending query to SSOS start_date: {} end_data: {}\n".format(search_start_date, search_end_date))
+    return _SSOSParser().parse(Query(mpc_observations_or_target_name,
+                                     search_start_date=search_start_date,
+                                     search_end_date=search_end_date).get())
+
 
 TELINST = [
     'AAT/WFI',

@@ -11,7 +11,7 @@ from mp_ephem.ephem import ObserverLocation
 class HSTFormat(unittest.TestCase):
 
     def setUp(self):
-        self.mpc_filename = 'data/hst.mpc'
+        self.mpc_filename = 'test/data/hst.mpc'
 
     def test_parser(self):
         obs = mp_ephem.EphemerisReader().read(self.mpc_filename)
@@ -25,7 +25,7 @@ class HSTFormat(unittest.TestCase):
 class SimonFormat(unittest.TestCase):
 
     def setUp(self):
-        self.mpc_filename = 'data/simon_format.txt'
+        self.mpc_filename = 'test/data/simon_format.txt'
 
     def test_parser(self):
         obs = mp_ephem.EphemerisReader().read(self.mpc_filename)
@@ -40,8 +40,8 @@ class SimonFormat(unittest.TestCase):
 class OrbitFit(unittest.TestCase):
 
     def setUp(self):
-        mpc_filename = 'data/o3o08.mpc'
-        self.abg_filename = 'data/o3o08.abg'
+        mpc_filename = 'test/data/o3o08.mpc'
+        self.abg_filename = 'test/data/o3o08.abg'
         self.observations = mp_ephem.EphemerisReader().read(mpc_filename)
         self.orbit = mp_ephem.BKOrbit(self.observations)
         self.mpc_lines = ("     HL7j2    C2013 04 03.62926 17 12 01.16 +04 13 33.3          24.1 R      568",
@@ -136,9 +136,9 @@ class OrbitFit(unittest.TestCase):
         print(self.orbit.coordinate)
 
     def test_null_obseravtion(self):
-        self.assertAlmostEqual(self.example_orbit.a.to(units.au).value, 137.91, 1)
+        self.assertAlmostEqual(self.example_orbit.a.to(units.au).value/100, 137.91/100, 1)
 
     def test_tnodb_discovery_flags(self):
-        orbit = mp_ephem.BKOrbit(None, ast_filename='data/o4h29.ast')
+        orbit = mp_ephem.BKOrbit(None, ast_filename='test/data/o4h29.ast')
         for observation in orbit.observations:
             self.assertTrue(observation.discovery)

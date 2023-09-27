@@ -3,7 +3,6 @@ from datetime import datetime
 import numpy
 import re
 import time
-import six
 from erfa import d2dtf, dtf2d
 from astropy.time import TimeString
 
@@ -65,14 +64,15 @@ class TimeMPC(TimeString):
         # floating fraction of a second.
         try:
             idot = timestr.rindex('.')
-        except:
+        except Exception as ex:
+            logging.debug(ex)
             fracday = 0.0
         else:
             timestr, fracday = timestr[:idot], timestr[idot:]
             fracday = float(fracday)
 
         for _, strptime_fmt_or_regex, _ in subfmts:
-            if isinstance(strptime_fmt_or_regex, six.string_types):
+            if isinstance(strptime_fmt_or_regex, str):
                 try:
                     tm = time.strptime(timestr, strptime_fmt_or_regex)
                 except ValueError as ex:
@@ -90,7 +90,7 @@ class TimeMPC(TimeString):
                     continue
                 tm = tm.groupdict()
                 vals = [int(tm.get(component, default)) for component, default
-                        in six.moves.zip(components, defaults)]
+                        in zip(components, defaults)]
 
                 hrprt = int(24 * fracday)
                 vals.append(hrprt)
@@ -127,9 +127,8 @@ class TimeMPC(TimeString):
             if has_yday:
                 yday = datetime(iy, im, id).timetuple().tm_yday
 
-            fracday = (((((ifracsec / 1000000.0 + isec) / 60.0 + imin) / 60.0) + ihr) / 24.0) * (10 ** 6)
-            fracday = '{0:06g}'.format(fracday)[0:self.precision]
-
+            fracday = (((((ifracsec / 10**self.precision + isec) / 60.0 + imin) / 60.0) + ihr) / 24.0)
+            fracday = f'{fracday:f}'.split('.')[1][0:self.precision]
             yield {'year': int(iy), 'mon': int(im), 'day': int(id),
                    'hour': int(ihr), 'min': int(imin), 'sec': int(isec),
                    'fracsec': int(ifracsec), 'yday': yday, 'fracday': fracday}

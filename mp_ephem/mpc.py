@@ -16,7 +16,8 @@ def download_mpc_database(target):
     :param target:
     :return:
     """
-    params  = {"object_id": target}
+
+    params = {"object_id": target}
     object_info_page = requests.get("{}{}".format(MPCSERVER, SHOW_OBJECT_ENDPOINT), params=params)
 
     #   <a href="../tmp/29981.txt" target="_blank">download</a>
@@ -33,4 +34,3 @@ def get_mpc_observations(target):
 
     fobj = io.StringIO(download_mpc_database(target))
     return EphemerisReader().read(fobj)
-

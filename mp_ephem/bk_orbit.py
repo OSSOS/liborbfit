@@ -10,7 +10,7 @@ import tempfile
 from astropy import units
 from astropy.coordinates import SkyCoord
 from astropy.time import Time
-from astropy.units.quantity import Quantity
+# from astropy.units.quantity import Quantity
 
 from .ephem import EphemerisReader, ObsRecord
 
@@ -91,7 +91,7 @@ class BKOrbit(object):
 
     @property
     def min_mag(self):
-        return self.compute_median_mag('r',percentile=5)
+        return self.compute_median_mag('r', percentile=5)
 
     def compute_median_mag(self, band, percentile=50):
         mags = []
@@ -113,12 +113,12 @@ class BKOrbit(object):
                     self._r_mag = mag + offsets[band]
                     break
         return self._r_mag
-    
+
     @property
     def mag(self):
         return self.r_mag
 
-    def _fit_radec(self, randomize=False):
+    def _fit_radec(self, randomize=False):  # noqa: C901
         # call fit_radec with mpc file and abgfile
         self.orbfit.fitradec.restype = ctypes.POINTER(ctypes.c_double * 2)
         self.orbfit.fitradec.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
@@ -380,10 +380,12 @@ class BKOrbit(object):
             _helio1 = SkyCoord(self._lon, self._lat, distance=_helio2.distance,
                                frame=HELIO_FRAME,
                                obstime=self.time)
-        #_geo1 = _helio1.transform_to(GEO_FRAME)
-        #_geo2 = SkyCoord(_geo1.lon, _geo1.lat, distance=self.distance,
-        #                 frame=GEO_FRAME,
-        #                 obstime=self.time)
+
+        # _geo1 = _helio1.transform_to(GEO_FRAME)
+        # _geo2 = SkyCoord(_geo1.lon, _geo1.lat, distance=self.distance,
+        #                  frame=GEO_FRAME,
+        #                  obstime=self.time)
+
         self.heliocentric = _helio1
         self.geocentric = _geo1
         self._coordinate = SkyCoord(self._ra, self._dec,
@@ -398,7 +400,6 @@ class BKOrbit(object):
         :rtype: ICRS
         """
         return self._coordinate
-
 
     @property
     def dra(self):
@@ -526,7 +527,8 @@ class BKOrbit(object):
             if isinstance(date, float):
                 try:
                     date = Time(date, format='jd', scale='utc', precision=6)
-                except:
+                except Exception as ex:
+                    logging.debug(str(ex))
                     raise ValueError("Bad date value: {}".format(date))
             _date = Time(date)
         else:
@@ -570,7 +572,8 @@ class BKOrbit(object):
             if isinstance(date, float):
                 try:
                     date = Time(date, format='jd', scale='utc', precision=6)
-                except:
+                except Exception as ex:
+                    logging.debug(str(ex))
                     raise ValueError("Bad date value: {}".format(date))
             _date = Time(date)
         else:
