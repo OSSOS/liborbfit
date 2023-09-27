@@ -37,7 +37,9 @@ jobs:
       run: python3 -m build
     - name: Store the distribution packages
       run: actions/upload-artifact@v3
-      path: dist/
+      with:
+        name: python-package-distributions
+        path: dist/
 
   publish-to-pypi:
     name: Publish Python distribution to PyPI
