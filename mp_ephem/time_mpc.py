@@ -64,7 +64,8 @@ class TimeMPC(TimeString):
         # floating fraction of a second.
         try:
             idot = timestr.rindex('.')
-        except:
+        except Exception as ex:
+            logging.debug(ex)
             fracday = 0.0
         else:
             timestr, fracday = timestr[:idot], timestr[idot:]

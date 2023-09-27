@@ -229,44 +229,44 @@ GEMINI_HEADER = """*************************************************************
                            http://ssd.jpl.nasa.gov/?sat_elem
  SATELLITE PHYSICAL PROPERTIES:
   Mean Radius (km)       = 2575.5   +-  2.0  Density (g/cm^3) =  1.880 +- 0.004
-  Mass (10^22 g)         = 13455.3           Geometric Albedo =  0.2 
-  GM (km^3/s^2)          = 8978.13  +-  0.06  V(1,0)          = -1.2 
+  Mass (10^22 g)         = 13455.3           Geometric Albedo =  0.2
+  GM (km^3/s^2)          = 8978.13  +-  0.06  V(1,0)          = -1.2
  SATELLITE ORBITAL DATA:
   Semi-major axis, a (km)= 1221.87 (10^3)  Orbital period     = 15.945421 d
-  Eccentricity, e        = 0.0288          Rotational period  = 
+  Eccentricity, e        = 0.0288          Rotational period  =
   Inclination, i  (deg)  = 0.28
 *******************************************************************************
- 
- 
+
+
 *******************************************************************************
-Ephemeris / WWW_USER Wed Oct 31 17:11:34 2012 Pasadena, USA      / Horizons    
+Ephemeris / WWW_USER Wed Oct 31 17:11:34 2012 Pasadena, USA      / Horizons
 *******************************************************************************
 Target body name: Titan (606)                     {source: SAT351}
 Center body name: Earth (399)                     {source: DE405}
 Center-site name: Mauna Kea
 *******************************************************************************
-Start time      : A.D. 2012-Nov-01 00:00:00.0000 UT      
-Stop  time      : A.D. 2013-Nov-01 00:00:00.0000 UT      
+Start time      : A.D. 2012-Nov-01 00:00:00.0000 UT
+Stop  time      : A.D. 2013-Nov-01 00:00:00.0000 UT
 Step-size       : 60 minutes
 *******************************************************************************
 Target pole/equ : IAU_TITAN                       {East-longitude -}
-Target radii    : 2575.0 x 2575.0 x 2575.0 km     {Equator, meridian, pole}    
+Target radii    : 2575.0 x 2575.0 x 2575.0 km     {Equator, meridian, pole}
 Center geodetic : 204.527800,19.8261152,4.2078485 {E-lon(deg),Lat(deg),Alt(km)}
 Center cylindric: 204.527800,6006.35451,2151.0229 {E-lon(deg),Dxy(km),Dz(km)}
 Center pole/equ : High-precision EOP model        {East-longitude +}
-Center radii    : 6378.1 x 6378.1 x 6356.8 km     {Equator, meridian, pole}    
+Center radii    : 6378.1 x 6378.1 x 6356.8 km     {Equator, meridian, pole}
 Target primary  : Saturn                          {source: DE405}
 Interfering body: MOON (Req= 1737.400) km         {source: DE405}
 Deflecting body : Sun, EARTH                      {source: DE405}
-Deflecting GMs  : 1.3271E+11, 3.9860E+05 km^3/s^2                              
+Deflecting GMs  : 1.3271E+11, 3.9860E+05 km^3/s^2
 Atmos refraction: NO (AIRLESS)
 RA format       : HMS
 Time format     : BOTH
-EOP file        : eop.121031.p130122                                           
+EOP file        : eop.121031.p130122
 EOP coverage    : DATA-BASED 1962-JAN-20 TO 2012-OCT-31. PREDICTS-> 2013-JAN-21
-Units conversion: 1 AU= 149597870.691 km, c= 299792.458 km/s, 1 day= 86400.0 s 
+Units conversion: 1 AU= 149597870.691 km, c= 299792.458 km/s, 1 day= 86400.0 s
 Table cut-offs 1: Elevation (-90.0deg=NO ),Airmass (< 2.000=YES),Daylight (YES)
-Table cut-offs 2: Solar Elongation (  0.0,180.0=NO )                           
+Table cut-offs 2: Solar Elongation (  0.0,180.0=NO )
 ***************************************************************************************
  Date__(UT)__HR:MN Date_________JDUT     R.A.___(ICRF/J2000.0)___DEC dRA*cosD d(DEC)/dt
 ***************************************************************************************
@@ -275,7 +275,7 @@ $$SOE
 GEMINI_FOOTER = """$$EOE
 *******************************************************************************
 Column meaning:
- 
+
 TIME
 
   Prior to 1962, times are UT1. Dates thereafter are UTC. Any 'b' symbol in
@@ -289,18 +289,18 @@ UTC times after the next July or January 1st.  The last known leap-second
 is used over any future interval.
 
   NOTE: "n.a." in output means quantity "not available" at the print-time.
- 
+
  R.A._(ICRF/J2000.0)_DEC =
    J2000.0 astrometric right ascension and declination of target center.
 Corrected for light-time. Units: HMS (HH MM SS.ff) and DMS (DD MM SS.f)
- 
+
  R.A._(a-apparent)__DEC. =
    Airless apparent right ascension and declination of the target center with
 respect to the Earth true-equator and the meridian containing the Earth true
 equinox of date.  Corrected for light-time, gravitational deflection of light,
 stellar aberration, precession & nutation.
    Units: HMS (HH MM SS.ff) and DMS (DD MM SS.f)
- 
+
  Ang-diam =
    The equatorial angular width of the target body full disk, if it were
 fully visible to the observer.  Units: ARCSECONDS

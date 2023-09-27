@@ -14,7 +14,6 @@ from astropy.time import Time
 from astropy import units
 from astropy.units.quantity import Quantity
 from astropy.io.ascii import Csv
-from astropy.table import Table
 
 
 class Query(object):
@@ -178,7 +177,8 @@ class Query(object):
         for quantity in quantities:
             try:
                 idx = int(quantity)
-            except:
+            except Exception as ex:
+                logging.debug(f"Failed looking up column row: {ex}")
                 idx = Query.horizons_quantities.index(quantity)
             if idx is not None and idx not in self._quantities:
                 self._quantities.append(idx)
@@ -383,8 +383,8 @@ class Body(object):
 
         # the header of the CSV structure is 2 lines before the start_of_ephmeris
         csv_lines = [str(self.data[start_idx - 2], 'utf-8')]
-        for l in self.data[start_idx + 1:end_idx]:
-            line = str(l, 'utf-8')
+        for line in self.data[start_idx + 1:end_idx]:
+            line = str(line, 'utf-8')
             csv_lines.append(line)
         csv = Csv()
         table = csv.read(csv_lines)
@@ -406,16 +406,17 @@ class Body(object):
                     break
                 elements_record_started = True
                 continue
-            for part in re.findall('((\S+=)\s+(\S+))', line):
+            for part in re.findall(r'((\S+=)\s+(\S+))', line):
                 key = part[1].strip().strip('=')
                 try:
                     value = float(part[2].strip())
-                except:
+                except Exception as ex:
+                    logging.debug(f"failed convertion {ex}")
                     value = part[2].strip()
                 self._elements[key] = value
 
     def _parse_obs_arc(self):
-        parts = re.search('# obs: (\d+) \((\d+)-(\d+)\)', str(self.data))
+        parts = re.search(r'# obs: (\d+) \((\d+)-(\d+)\)', str(self.data))
         if parts is None:
             # Just fake some data
             self._arc_length = 30 * units.day

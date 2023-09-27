@@ -7,7 +7,7 @@ version = __version__.version
 
 dependencies = ['astropy >= 1.0', 'pyerfa',
                 'numpy >= 1.6.1',
-                'requests', 'scipy']
+                'requests']
 
 sources = [x for x in glob.glob('src/*.c')]
 
