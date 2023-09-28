@@ -1,7 +1,7 @@
 import glob
 import sys
 from setuptools import setup, find_packages, Extension
-from mp_ephem import __version__
+from src.mp_ephem import __version__
 
 version = __version__.version
 
@@ -9,7 +9,7 @@ dependencies = ['astropy >= 1.0', 'pyerfa',
                 'numpy >= 1.6.1',
                 'requests']
 
-sources = [x for x in glob.glob('src/*.c')]
+sources = [x for x in glob.glob('src/orbfit/*.c')]
 
 setup(name='mp_ephem',
       version=version,
@@ -30,8 +30,9 @@ setup(name='mp_ephem',
       scripts = ['scripts/minor_planet_ephemeris.py'],
       package_data={'mp_ephem': ['data/*']},
       install_requires=dependencies,
-      packages=find_packages(exclude=['test', ]),
-      ext_modules=[Extension('mp_ephem.orbit', sources,
+      packages=find_packages(where='src'),
+      package_dir = {"": "src"},
+      ext_modules=[Extension('mp_ephem.orbfit', sources,
                              extra_compile_args=['-Wno-unused-variable'],
                              )],
       )

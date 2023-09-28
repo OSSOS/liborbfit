@@ -1,5 +1,5 @@
-astropy
 numpy
 pyerfa
-requests
 urllib3
+requests
+astropy
