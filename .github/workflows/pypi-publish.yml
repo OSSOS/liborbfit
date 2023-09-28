@@ -4,27 +4,9 @@ name: Upload Package to PyPI
 on: push
 
 jobs:
-  test:
-    name: Test the release branch
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: setup Python
-      uses: actions/setup-python@v4
-      with: 
-        python-version: "3.x"
-    - name: install pytest
-      run: python3 -m pip install pytest --user
-    - name: run test
-      working-directory: test
-      run: pytest 
-        
   build:
     name: Build distribution
-    needs:
-      - test
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python

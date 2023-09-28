@@ -48,7 +48,7 @@ class BKOrbit(object):
         """
         __PATH__ = os.path.dirname(__file__)
         # find the orbit.so library
-        __ORBFIT_LIB__ = glob.glob(os.path.join(__PATH__, '*orbit*.so'))[0]
+        __ORBFIT_LIB__ = glob.glob(os.path.join(__PATH__, 'orbfit*.so'))[0]
 
         # Choose a format of JPL binary ephemeris file
         is_64bits = ctypes.sizeof(ctypes.c_voidp) == 8
