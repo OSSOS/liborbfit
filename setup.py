@@ -1,13 +1,12 @@
 import glob
 import sys
 from setuptools import setup, find_packages, Extension
-from src.mp_ephem import __version__
 
-version = __version__.version
+version = "0.12.0"
 
-dependencies = ['astropy >= 1.0', 'pyerfa',
-                'numpy >= 1.6.1',
-                'requests']
+#dependencies = ['astropy >= 1.0', 'pyerfa',
+#                'numpy >= 1.6.1',
+#                'requests']
 
 sources = [x for x in glob.glob('src/orbfit/*.c')]
 
