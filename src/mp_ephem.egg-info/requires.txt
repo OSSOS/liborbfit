@@ -1,4 +1,0 @@
-astropy>=1.0
-pyerfa
-numpy>=1.6.1
-requests

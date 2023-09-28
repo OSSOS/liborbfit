@@ -6,3 +6,5 @@ dist
 MANIFEST
 .idea
 venv
+.DS_Store
+.eggs

@@ -6,7 +6,8 @@ version = "0.12.0"
 
 dependencies = ['astropy', 'pyerfa', 'numpy', 'requests']
 
-sources = [x for x in glob.glob('src/orbfit/*.c')]
+sources = [x for x in glob.glob('orbfit/*.c')]
+headers = [x for x in glob.glob('orbfit/*.h')]
 
 setup(name='mp_ephem',
       version=version,
@@ -29,6 +30,7 @@ setup(name='mp_ephem',
       install_requires=dependencies,
       packages=find_packages(where='src'),
       package_dir = {"": "src"},
+      headers = headers,
       ext_modules=[Extension('mp_ephem.orbfit', sources,
                              extra_compile_args=['-Wno-unused-variable'],
                              )],
