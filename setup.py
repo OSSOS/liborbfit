@@ -4,9 +4,7 @@ from setuptools import setup, find_packages, Extension
 
 version = "0.12.0"
 
-#dependencies = ['astropy >= 1.0', 'pyerfa',
-#                'numpy >= 1.6.1',
-#                'requests']
+dependencies = ['astropy', 'pyerfa', 'numpy', 'requests']
 
 sources = [x for x in glob.glob('src/orbfit/*.c')]
 
