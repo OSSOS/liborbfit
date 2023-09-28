@@ -16,7 +16,7 @@ jobs:
     - name: Install pypa/build
       run: python3 -m pip install build --user
     - name: Build for upload
-      run: python3 -m build
+      run: python3 -m build --sdist
     - name: Store the distribution packages
       uses: actions/upload-artifact@v3
       with:
