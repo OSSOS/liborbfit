@@ -132,10 +132,10 @@ class OrbitFit(unittest.TestCase):
         :return:
         """
         self.orbit.predict("2013 04 09.55115")
-        print(self.orbit.heliocentric)
-        print(self.orbit.geocentric)
-        print(self.orbit.geocentric.transform_to('geocentricmeanecliptic'))
-        print(self.orbit.coordinate)
+        #print(self.orbit.heliocentric)
+        #print(self.orbit.geocentric)
+        #print(self.orbit.geocentric.transform_to('geocentricmeanecliptic'))
+        #print(self.orbit.coordinate)
 
     def test_null_obseravtion(self):
         self.assertAlmostEqual(self.example_orbit.a.to(units.au).value/100, 137.91/100, 1)
