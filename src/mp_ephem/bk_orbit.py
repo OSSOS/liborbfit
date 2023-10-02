@@ -163,7 +163,9 @@ class BKOrbit(object):
             if _nobs < 3:
                 raise BKOrbitError()
             _mpc_file.seek(0)
-            self.mpc = open(_mpc_file.name, 'r').read()
+            with open(_mpc_file.name, 'r') as f:
+                self.mpc = f.read()
+            # self.mpc = open(_mpc_file.name, 'r').read()
             if self.abg_filename is None:
                 _abg_file = tempfile.NamedTemporaryFile(mode='w+', suffix='.abg')
                 _abg_file_name = _abg_file.name
