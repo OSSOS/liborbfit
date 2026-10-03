@@ -131,7 +131,12 @@ void
 earth3d(double t,	/* time is in years here */
 	int obscode,
 	double *x, double *y, double *z);
-/*ICRS vector from SSBary to observatory location */
+/* UTC Julian Date to TT Julian Date.  DE405 is evaluated at TT. */
+double
+utc_jd_to_tt(double jd_utc);
+
+/*ICRS vector from SSBary to observatory location.
+ * jd is a UTC Julian Date. */
 void
 earth_ssbary(double	jd,
 	     int	obscode,

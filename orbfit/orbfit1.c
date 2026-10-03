@@ -266,6 +266,9 @@ int scan_observation(char *inbuff, OBSERVATION *obs, OBSERVATION *previous)
           obs->thetax = DTOR * hmsdeg(rastring);
           obs->thetay = DTOR * dmsdeg(decstring);
           obs->dthetax = obs->dthetay = obs->dthetay * ARCSEC;
+          /* No site code on this line.  Keep the frame origin at the
+           * barycenter; mpc3d places the supplied geocentric vector. */
+          obs->obscode = OBSCODE_SSBARY;
           return(-2);
       }
   }

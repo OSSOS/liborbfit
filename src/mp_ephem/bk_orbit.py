@@ -152,10 +152,11 @@ class BKOrbit(object):
                     dec = coordinate.dec.to_string(unit=units.degree, decimal=False,
                                                    sep=":", precision=1, alwayssign=True,
                                                    pad=True)
+                # UTC JD. The ephemeris converts this to TT; do not pass TT here.
                 if obs.location is None:
-                    _mpc_file.write("{} {} {} {} {}\n".format(obs.date.jd, ra, dec, res, int(obs.observatory_code)))
+                    _mpc_file.write("{} {} {} {} {}\n".format(obs.date.utc.jd, ra, dec, res, int(obs.observatory_code)))
                 else:
-                    _mpc_file.write("{} {} {} {} {} {} {}\n".format(obs.date.jd, ra, dec, res,
+                    _mpc_file.write("{} {} {} {} {} {} {}\n".format(obs.date.utc.jd, ra, dec, res,
                                                                     obs.location.x,
                                                                     obs.location.y,
                                                                     obs.location.z))
@@ -541,7 +542,7 @@ class BKOrbit(object):
             if -minimum_delta < self.time - _date < minimum_delta:
                 return
 
-        jd = ctypes.c_double(_date.jd)
+        jd = ctypes.c_double(_date.utc.jd)
         if abg_file is None:
             abg_file = tempfile.NamedTemporaryFile(suffix='.abg')
             abg_file.write(bytes(self.abg, 'utf-8'))
@@ -586,7 +587,7 @@ class BKOrbit(object):
             if -minimum_delta < self.time - _date < minimum_delta:
                 return
 
-        jd = ctypes.c_double(_date.jd)
+        jd = ctypes.c_double(_date.utc.jd)
         if abg_file is None:
             abg_file = tempfile.NamedTemporaryFile(suffix='.abg')
             abg_file.write(bytes(self.abg, 'utf-8'))
@@ -636,8 +637,8 @@ class BKOrbit(object):
             date = Time(date, scale='utc')
 
         try:
-            start_date = date.jd
-            end_date = date.jd + 1
+            start_date = date.utc.jd
+            end_date = date.utc.jd + 1
         except Exception as e:
             logging.error(str(e))
             return None

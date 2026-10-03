@@ -36,7 +36,7 @@ class SimonFormat(unittest.TestCase):
     def test_fitradec(self):
         orbit = mp_ephem.BKOrbit(None, self.mpc_filename)
         orbit.predict(orbit.observations[0].date)
-        self.assertAlmostEqual(orbit.a.to('au').value, 43.8026798, 3)
+        self.assertAlmostEqual(orbit.a.to('au').value, 43.8015219, 3)
 
 
 class OrbitFit(unittest.TestCase):
@@ -68,7 +68,7 @@ class OrbitFit(unittest.TestCase):
         self.assertAlmostEqual(self.orbit.inc.to(units.degree).value, 8.05, 2)
         self.assertAlmostEqual(self.orbit.Node.to(units.degree).value, 113.85, 2)
         self.assertAlmostEqual(self.orbit.om.to(units.degree).value, 66.24, 2)
-        self.assertAlmostEqual(self.orbit.T.to(units.day).value, 2447884.5070, 3)
+        self.assertAlmostEqual(self.orbit.T.to(units.day).value, 2447884.5762, 3)
         self.assertAlmostEqual(self.orbit.epoch.jd, 2456392.05115, 4)
 
     def test_summarize(self):
