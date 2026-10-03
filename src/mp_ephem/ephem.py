@@ -602,6 +602,9 @@ class ObsRecord(object):
         mpc_format = '0s5s7s1s1s1s17s12s12s9x5s1s6x3s'
         ossos_format1 = '1s4s7s1s1s1s17s12s12s9x5s1s6x3s'
         ossos_format2' = '1s0s11s1s1s1s17s12s12s9x5s1s6x3s'
+        classy_format = '1s2s11s1s8s3s1s2s8s1s8s1s4s1s1s1s5s1s4s1s4s'
+  112123456789011123456781231112123456789912345
+'#C  AS222083100 FbAS2001    Z  1368.97 2924.14 0.20 0 ----- ----   12 % G
 
         if those fail then tries Alex Parker's .ast format.
 
@@ -1076,6 +1079,8 @@ class OSSOSComment(object):
         self._plate_uncertainty = None
         self._astrometric_level = 0
         self.likelihood = likelihood
+        if self.likelihood is not None and not isinstance(self.likelihood, int):
+            self.likelihood = int(self.likelihood)
         try:
             self.plate_uncertainty = plate_uncertainty
             self.astrometric_level = astrometric_level
@@ -1115,11 +1120,12 @@ class OSSOSComment(object):
         if len(values) > 1:
             comment_string = values[1].lstrip(' ')
         # O 1631355p21 O13AE2O     Z  1632.20 1102.70 0.21 3 ----- ---- % Apcor failure.
+        # '#C  AS222083100 FbAS2001    Z  1368.97 2924.14 0.20 0 ----- ----   12 % G
         ossos_comment_format = '1s1x12s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
         old_ossos_comment_format = '1s1x10s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
         bad_ossos_comment_format = '1s3x10s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x'
         orig_ossos_comment_format = '1s1x10s1x8s1x1s1s1x6s1x6s1x5s1x4s1x4s1x'
-        classy_comment_format = '1s1x10s1x8s1x1s1s1x6s1x6s1x5s1x4s1x4s1x4s1x'
+        classy_comment_format = '1s1x12s1x11s1x1s1s1x7s1x7s1x4s1x1s1x5s1x4s1x4s1x'
 
         for struct_ in [ossos_comment_format, old_ossos_comment_format, bad_ossos_comment_format,
                         orig_ossos_comment_format, classy_comment_format]:
@@ -1335,7 +1341,7 @@ class OSSOSComment(object):
         comm += self.to_str('{:5.2f}', self.mag, "-" * 5)
         comm += self.to_str('{:4.2f}', self.mag_uncertainty, "-" * 4)
         if self.likelihood is not None:
-            comm += self.to_str('{:4d}', int(numpy.floor(self.likelihood)), '-'*4)
+            comm += self.to_str('{:4d}', int(numpy.floor(float(self.likelihood))), '-'*4)
         comm += ' % {}'.format(self.comment)
 
         return comm

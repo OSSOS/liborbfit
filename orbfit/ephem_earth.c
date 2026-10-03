@@ -7,12 +7,17 @@ static char vcid[] = "$Id: ephem_earth.c,v 1.1 2006/11/22 20:31:50 observe Exp $
 *** returning the location of earth geocenter relative to SSBARY.  Also
 *** have eliminated the nutation & libration routines.
 *** 8/9/99 gmb
-*** add 64s difference between UT (usually used in position tables) and TDB
-*** (used in this ephemeris).
+***
+*** Callers pass UTC Julian Dates (MPC times).  DE405 is argumented in
+*** Teph, which differs from TT by under 2 ms, so the interpolators
+*** evaluate the ephemeris at TT.  TT - UTC = 32.184 s + (TAI - UTC).
+*** TAI - UTC is the leap-second offset and is not constant: the old
+*** fixed 64 s was the 1999 value (actually 64.184 s) and is 5.184 s
+*** short for dates since the 2017 January 1 leap second.
+*** Local sidereal time is still computed from the UTC date.
 ***/
 #include "orbfit.h"
 #include <string.h>
-#define TDBOFFSET (64./86400.)
 #define FNAMESIZE 256
 #define BUFFSIZE  512
 /* structures used to keep observatory information: */
@@ -276,6 +281,109 @@ int Initialize_Ephemeris()
 }
 
 /**==========================================================================**/
+/**  utc_jd_to_tt                                                            **/
+/**                                                                          **/
+/**  TT = TAI + 32.184 s, and TAI - UTC is the IERS leap-second offset.      **/
+/**  Before 1972 the offset also drifts (USNO tai-utc.dat).  After the      **/
+/**  last tabulated leap second the latest offset is held.  IERS Bulletin   **/
+/**  C 72 (2026 July 6) keeps TAI - UTC = 37 s through 2026 December; a     **/
+/**  newly announced leap second has to be added to the table below.        **/
+/**  Dates before 1960 (when UTC was not defined) use the 1960 Jan 1        **/
+/**  expression.                                                             **/
+/**                                                                          **/
+/**==========================================================================**/
+
+/* TAI - UTC (seconds) at a UTC Julian Date.  The fraction of jd_utc is the
+ * fraction of that UTC day, including a smeared leap second. */
+static double tai_minus_utc(double jd_utc)
+{
+  /* jd0: UTC JD when this expression starts.
+     dat0, mjd0, rate: TAI-UTC = dat0 + (MJD - mjd0) * rate seconds.
+     Values are the IERS/USNO tai-utc series.  1960-01-01 continues the
+     1961 rate back to the start of UTC. */
+  static const struct {
+    double jd0, dat0, mjd0, rate;
+  } leap[] = {
+    { 2436934.5,  1.4178180, 37300.0, 0.0012960 },  /* 1960-01-01 */
+    { 2437300.5,  1.4228180, 37300.0, 0.0012960 },  /* 1961-01-01 */
+    { 2437512.5,  1.3728180, 37300.0, 0.0012960 },  /* 1961-08-01 */
+    { 2437665.5,  1.8458580, 37665.0, 0.0011232 },  /* 1962-01-01 */
+    { 2438334.5,  1.9458580, 37665.0, 0.0011232 },  /* 1963-11-01 */
+    { 2438395.5,  3.2401300, 38761.0, 0.0012960 },  /* 1964-01-01 */
+    { 2438486.5,  3.3401300, 38761.0, 0.0012960 },  /* 1964-04-01 */
+    { 2438639.5,  3.4401300, 38761.0, 0.0012960 },  /* 1964-09-01 */
+    { 2438761.5,  3.5401300, 38761.0, 0.0012960 },  /* 1965-01-01 */
+    { 2438820.5,  3.6401300, 38761.0, 0.0012960 },  /* 1965-03-01 */
+    { 2438942.5,  3.7401300, 38761.0, 0.0012960 },  /* 1965-07-01 */
+    { 2439004.5,  3.8401300, 38761.0, 0.0012960 },  /* 1965-09-01 */
+    { 2439126.5,  4.3131700, 39126.0, 0.0025920 },  /* 1966-01-01 */
+    { 2439887.5,  4.2131700, 39126.0, 0.0025920 },  /* 1968-02-01 */
+    { 2441317.5, 10.0, 0.0, 0.0 },                 /* 1972-01-01 */
+    { 2441499.5, 11.0, 0.0, 0.0 },                 /* 1972-07-01 */
+    { 2441683.5, 12.0, 0.0, 0.0 },                 /* 1973-01-01 */
+    { 2442048.5, 13.0, 0.0, 0.0 },                 /* 1974-01-01 */
+    { 2442413.5, 14.0, 0.0, 0.0 },                 /* 1975-01-01 */
+    { 2442778.5, 15.0, 0.0, 0.0 },                 /* 1976-01-01 */
+    { 2443144.5, 16.0, 0.0, 0.0 },                 /* 1977-01-01 */
+    { 2443509.5, 17.0, 0.0, 0.0 },                 /* 1978-01-01 */
+    { 2443874.5, 18.0, 0.0, 0.0 },                 /* 1979-01-01 */
+    { 2444239.5, 19.0, 0.0, 0.0 },                 /* 1980-01-01 */
+    { 2444786.5, 20.0, 0.0, 0.0 },                 /* 1981-07-01 */
+    { 2445151.5, 21.0, 0.0, 0.0 },                 /* 1982-07-01 */
+    { 2445516.5, 22.0, 0.0, 0.0 },                 /* 1983-07-01 */
+    { 2446247.5, 23.0, 0.0, 0.0 },                 /* 1985-07-01 */
+    { 2447161.5, 24.0, 0.0, 0.0 },                 /* 1988-01-01 */
+    { 2447892.5, 25.0, 0.0, 0.0 },                 /* 1990-01-01 */
+    { 2448257.5, 26.0, 0.0, 0.0 },                 /* 1991-01-01 */
+    { 2448804.5, 27.0, 0.0, 0.0 },                 /* 1992-07-01 */
+    { 2449169.5, 28.0, 0.0, 0.0 },                 /* 1993-07-01 */
+    { 2449534.5, 29.0, 0.0, 0.0 },                 /* 1994-07-01 */
+    { 2450083.5, 30.0, 0.0, 0.0 },                 /* 1996-01-01 */
+    { 2450630.5, 31.0, 0.0, 0.0 },                 /* 1997-07-01 */
+    { 2451179.5, 32.0, 0.0, 0.0 },                 /* 1999-01-01 */
+    { 2453736.5, 33.0, 0.0, 0.0 },                 /* 2006-01-01 */
+    { 2454832.5, 34.0, 0.0, 0.0 },                 /* 2009-01-01 */
+    { 2456109.5, 35.0, 0.0, 0.0 },                 /* 2012-07-01 */
+    { 2457204.5, 36.0, 0.0, 0.0 },                 /* 2015-07-01 */
+    { 2457754.5, 37.0, 0.0, 0.0 }                  /* 2017-01-01 */
+  };
+  const int nleap = (int)(sizeof leap / sizeof leap[0]);
+  int i;
+  double mjd;
+
+  if (jd_utc < leap[0].jd0)
+    i = 0;
+  else {
+    for (i = nleap - 1; i > 0; i--)
+      if (jd_utc >= leap[i].jd0) break;
+  }
+
+  mjd = jd_utc - 2400000.5;
+  return leap[i].dat0 + (mjd - leap[i].mjd0) * leap[i].rate;
+}
+
+double utc_jd_to_tt(double jd_utc)
+{
+  /* UTC JD runs one calendar day per JD day, so a leap-second day is
+   * squeezed into 86400 JD seconds.  Undo that, then add TAI-UTC at 0h
+   * and the 32.184 s TT-TAI offset.  Same construction as SOFA utctai. */
+  double jd0, fd, dat0, dat12, dat24, dlod, dleap;
+  const double tt_minus_tai = 32.184;
+  const double sec_per_day = 86400.0;
+
+  jd0 = floor(jd_utc - 0.5) + 0.5;
+  fd = jd_utc - jd0;
+  dat0 = tai_minus_utc(jd0);
+  dat12 = tai_minus_utc(jd0 + 0.5);
+  dat24 = tai_minus_utc(jd0 + 1.0);
+  dlod = 2.0 * (dat12 - dat0);
+  dleap = dat24 - (dat0 + dlod);
+  fd *= (sec_per_day + dleap) / sec_per_day;
+  fd *= (sec_per_day + dlod) / sec_per_day;
+  return jd0 + fd + (dat0 + tt_minus_tai) / sec_per_day;
+}
+
+/**==========================================================================**/
 /**  Interpolate_Position                                                    **/
 /**                                                                          **/
 /**     This function computes a position vector for a selected planetary    **/
@@ -284,7 +392,7 @@ int Initialize_Ephemeris()
 /**     the function Read_Coefficients (when necessary).                     **/
 /**                                                                          **/
 /**  Inputs:                                                                 **/
-/**     Time     -- Time for which position is desired (Julian Date).        **/
+/**     Time     -- UTC Julian Date.  Converted to TT before interpolation.  **/
 /**     Target   -- Solar system body for which position is desired.         **/
 /**     Position -- Pointer to external array to receive the position.       **/
 /**                                                                          **/
@@ -298,7 +406,7 @@ void Interpolate_Position( double Time , int Target , double Position[3] )
   int       i , j;
   long int  C , G , N , offset = 0;
 
-  Time += TDBOFFSET; /****!!!!! Account for difference between TDB and UT**/
+  Time = utc_jd_to_tt(Time);
   /*--------------------------------------------------------------------------*/
   /* This function doesn't "do" nutations or librations.                      */
   /*--------------------------------------------------------------------------*/
@@ -432,7 +540,7 @@ void Interpolate_State(double Time,
   int       i , j;
   long int  C , G , N , offset = 0;
 
-  Time += TDBOFFSET; /****!!!!! Account for difference between TDB and UT**/
+  Time = utc_jd_to_tt(Time);
 
   /*--------------------------------------------------------------------------*/
   /* This function doesn't "do" nutations or librations.                      */

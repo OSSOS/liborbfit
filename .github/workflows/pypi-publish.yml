@@ -1,10 +1,8 @@
-# This workflow will upload a Python Package using Twine when a release is created
+# Build and upload the package to PyPI. Run manually from the Actions tab.
 name: Upload Package to PyPI
 
-on: 
-  push:
-    branches:
-    - master
+on:
+  workflow_dispatch:
 
 jobs:
   build:
@@ -21,7 +19,7 @@ jobs:
     - name: Build for upload
       run: python3 -m build --sdist
     - name: Store the distribution packages
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: python-package-distributions
         path: dist/
@@ -38,8 +36,8 @@ jobs:
       id-token: write
     steps:
     - name: Download all the dists
-      uses: actions/download-artifact@v3
-      with: 
+      uses: actions/download-artifact@v4
+      with:
         name: python-package-distributions
         path: dist/
     - name: Publish to PyPI
