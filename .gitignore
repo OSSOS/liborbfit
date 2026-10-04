@@ -8,3 +8,8 @@ MANIFEST
 venv
 .DS_Store
 .eggs
+
+# written by setuptools_scm at build time
+src/mp_ephem/__version__.py
+*.egg-info
+*.so

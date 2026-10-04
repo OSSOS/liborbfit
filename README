@@ -7,7 +7,24 @@ Started working on this on 10=APR=2012
 
 INSTALL
 
-python setup.py install
+pip install mp_ephem          (from PyPI)
+pip install .                 (from a source checkout)
+
+VERSIONS
+
+Releases are numbered YYYY.MAJOR.FIX, e.g. 2026.2.1:
+
+    YYYY   year of the release, so the age of a version is obvious
+    MAJOR  increments for releases with new features or changed results
+    FIX    increments for bug-fix releases
+
+The first release of each year is YYYY.1.0.  The version comes from the git
+tag (v2026.2.1); nothing in the source needs editing.  Builds between releases
+get development versions such as 2026.2.2.dev3+g1a2b3c4.
+
+To release, run the "Upload Package to PyPI" workflow on master from the
+GitHub Actions tab and choose "major" or "bugfix".  It computes the next
+version, uploads to PyPI, then tags the commit and creates a GitHub release.
 
 PYTHON USAGE:
 

@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools_scm>=8"]
+build-backend = "setuptools.build_meta"
+
+# Version is YYYY.MAJOR.FIX, taken from release tags like v2026.1.0.
+# Untagged builds get a development version such as 2026.1.1.dev3+g1234abc.
+[tool.setuptools_scm]
+version_file = "src/mp_ephem/__version__.py"
+tag_regex = '^v(?P<version>\d{4}\.\d+\.\d+)$'
+
+[tool.setuptools_scm.scm.git]
+describe_command = ["git", "describe", "--dirty", "--tags", "--long", "--match", "v[0-9][0-9][0-9][0-9].*"]
