@@ -1,22 +1,49 @@
-# Build and upload the package to PyPI. Run manually from the Actions tab.
+# Release to PyPI. Run manually from the Actions tab on master and choose the release type.
+# Versions are YYYY.MAJOR.FIX; the next one is computed from the v* release tags,
+# and the tag plus a GitHub release are created only after the PyPI upload succeeds.
+# The file name is registered as a PyPI trusted publisher: do not rename it.
 name: Upload Package to PyPI
 
 on:
   workflow_dispatch:
+    inputs:
+      release_type:
+        description: "major (new features or changed results) or bugfix"
+        required: true
+        type: choice
+        options:
+          - bugfix
+          - major
+
+concurrency:
+  group: pypi-release
 
 jobs:
   build:
     name: Build distribution
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: "3.x"
+    - name: Compute next version
+      id: version
+      run: |
+        version=$(python3 .github/scripts/next_version.py "${{ inputs.release_type }}")
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+        echo "Releasing $version" >> "$GITHUB_STEP_SUMMARY"
     - name: Install pypa/build
       run: python3 -m pip install build --user
     - name: Build for upload
+      env:
+        SETUPTOOLS_SCM_PRETEND_VERSION: ${{ steps.version.outputs.version }}
       run: python3 -m build --sdist
     - name: Store the distribution packages
       uses: actions/upload-artifact@v4
@@ -42,3 +69,28 @@ jobs:
         path: dist/
     - name: Publish to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
+
+  tag-release:
+    name: Tag and create GitHub release
+    needs:
+    - build
+    - publish-to-pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+    - name: Download all the dists
+      uses: actions/download-artifact@v4
+      with:
+        name: python-package-distributions
+        path: dist/
+    - name: Create tag and release
+      env:
+        GH_TOKEN: ${{ github.token }}
+        VERSION: ${{ needs.build.outputs.version }}
+      run: |
+        gh release create "v$VERSION" dist/* \
+          --target "$GITHUB_SHA" \
+          --title "mp_ephem $VERSION" \
+          --generate-notes

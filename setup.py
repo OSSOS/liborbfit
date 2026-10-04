@@ -2,15 +2,12 @@ import glob
 import sys
 from setuptools import setup, find_packages, Extension
 
-version = "0.14.0"
-
 dependencies = ['astropy', 'pyerfa', 'numpy', 'requests']
 
 sources = [x for x in glob.glob('orbfit/*.c')]
 headers = [x for x in glob.glob('orbfit/*.h')]
 
 setup(name='mp_ephem',
-      version=version,
       url='http://github.com/OSSOS/liborbfit',
       author='''JJ Kavelaars (jjk@uvic.ca), Michele Bannister (micheleb@uvic.ca)''',
       maintainer='M Bannister and JJ Kavelaars',
