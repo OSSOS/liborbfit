@@ -1,5 +1,7 @@
 /* 	$Id: orbfit.h,v 1.1 2006/11/22 20:31:50 observe Exp $	 */
 /* Definitions for the orbit-fitting software */
+#ifndef ORBFIT_H
+#define ORBFIT_H
 #include "nrutil.h"
 #include <math.h>
 #include <stdio.h>
@@ -363,3 +365,16 @@ is_visible(OBSERVATION *obs);
 void
 fake_observation(PBASIS *p, 
 		 OBSERVATION *obs);
+
+/* Sexagesimal string to decimal degrees (hmsdeg: hours to degrees) */
+double dmsdeg(const char *string);
+double hmsdeg(const char *string);
+
+/* Invert 1-indexed matrix in[1..dim][1..dim] into out; in is destroyed.
+ * Returns non-zero if the matrix is singular. */
+int invert_matrix(double **in, double **out, int dim);
+
+/* Geocentric ICRS x/y/z (km) to SSBary x/y/z (AU) at UTC JD jd */
+void geo_to_ssbary(double jd, double *x, double *y, double *z);
+
+#endif

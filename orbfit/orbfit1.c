@@ -1,8 +1,5 @@
 /* 	$Id: orbfit1.c,v 1.1 2006/11/22 20:31:50 observe Exp $	 */
 
-#ifndef lint
-static char vcid[] = "$Id: orbfit1.c,v 1.1 2006/11/22 20:31:50 observe Exp $";
-#endif /* lint */
 /* orbfit1.c - program to fit orbital parameters to observed KBO data.
 This is basically a template program which makes some simplifying
 assumptions, with the goal of setting up for a more exact fit and for
@@ -15,6 +12,7 @@ encounter in the future.
  
 #include "orbfit.h"
 #include <string.h>
+#include <strings.h>
 #include "ephem_types.h"
 #include <ctype.h>
 
@@ -25,8 +23,6 @@ double	jd0;		/* Zeropoint of time scale */
 
 double mpc_dtheta=DEFAULT_DTHETA;	/*default astrometric error*/
 
-int invert_matrix(double **, double **, int);
-void geo_to_ssbary(double , double *, double *, double *);
 void
 set_mpc_dtheta(double d) {
   mpc_dtheta = d;
@@ -40,9 +36,7 @@ kbo3d_helio(PBASIS *pin,
 {
   double        vk[3],dxk[7],dyk[7],dzk[7];
   double        xe,ye,ze;
-  double        invz;
   double        distance;
-  int           i;
 
   /* Get the Earth position if not already calculated*/
   if (obs->xe < -9.) {
@@ -187,7 +181,6 @@ char *
 fgets_nocomment(char *inbuff, int length, 
 		FILE *fpin, FILE *fpout)
 {
-  int needmore=0;
   char test[10];
   while (1) {
     if (fgets(inbuff,length,fpin)==NULL) return(NULL);
@@ -212,8 +205,6 @@ int scan_observation(char *inbuff, OBSERVATION *obs, OBSERVATION *previous)
   char two_line_flag[80]; // if set then this is the 2nd line of a two line MPC entry
   char codestring[16];
   double jd;
-  extern double dmsdeg(char *string);
-  extern double hmsdeg(char *string);
   /* get date to see which format this is */
   /* For an MPC format the first field will have non-numeric characters*/
   jd = strtod(inbuff, &endptr);
@@ -299,9 +290,8 @@ read_radec(OBSERVATION obsarray[], char *fname, int *nobs)
   FILE *fptr;
   OBSERVATION  *obs;
   int  scan_status_flag;
-  int  i;
   char	inbuff[256];
-  double jd,ra,dec,elat,elon;
+  double elat,elon;
 
   if (fname==NULL)
     fptr = stdin;
@@ -555,7 +545,7 @@ predict_posn(PBASIS *pin,
              OBSERVATION *obs,
              double **sigxy)    /*this holds xy error matrix*/
 {
-  int   i,j,t;
+  int   i,j;
   double *dx,*dy, distance;
 
   dx=dvector(1,6);
@@ -591,9 +581,6 @@ int
 invert_matrix(double **in, double **out,
               int dim)
 {
-  extern void ludcmp(double **a, int n, int *indx, double *d);
-  extern void ludcmp(double **a, int n, int *indx, double *d);
-
   int   *indx,i,j;
   double *tvec,det;
 
@@ -633,9 +620,7 @@ void
 mpc3d(double t,       /* time is in years here */
         double *x, double *y, double *z)
 {
-  double xTelEq,yTelEq,zTelEq;
   double xec, yec, zec;
-  double xgeo[3];
 
   geo_to_ssbary(t/DAY+jd0, x, y, z);
 
@@ -660,7 +645,7 @@ earth3d(double t,	/* time is in years here */
 	int obscode,
 	double *x, double *y, double *z)
 {
-  double x1,y1,z1,xTelEq,yTelEq,zTelEq;
+  double x1,y1,z1;
   double xec, yec, zec; 
 
   /* get observatory posn wrt barycenter */
@@ -878,7 +863,6 @@ kbo3d(PBASIS *pin,
   static int init=0;
   static int tdir;
   double t1,dt,dtv;
-  double tstep=20.*DAY; 
 
   /* decide whether we need to reset integrator to t=0*/
   if (!init) {
@@ -1085,8 +1069,6 @@ fake_observation(PBASIS *p,
 		 OBSERVATION *obs)
 {
   static long idum=-1;
-  float gasdev(long *idum);
-  float distance;
 
   /* seed the random number generator*/
   if (idum<0) {
@@ -1095,7 +1077,7 @@ fake_observation(PBASIS *p,
     idum = -tp.tv_usec;
   }
 
-  distance = kbo2d(p,obs,&(obs->thetax),NULL,&(obs->thetay),NULL);
+  kbo2d(p,obs,&(obs->thetax),NULL,&(obs->thetay),NULL);
 
   /* Add measurement noise to the positions */
   obs->thetax += obs->dthetax*gasdev(&idum);

@@ -27,7 +27,5 @@ setup(name='mp_ephem',
       packages=find_packages(where='src'),
       package_dir = {"": "src"},
       headers = headers,
-      ext_modules=[Extension('mp_ephem.orbfit', sources,
-                             extra_compile_args=['-Wno-unused-variable'],
-                             )],
+      ext_modules=[Extension('mp_ephem.orbfit', sources)],
       )

@@ -1,8 +1,4 @@
 /* 	$Id: mrqcof_orbit.c,v 1.1 2006/11/22 20:31:50 observe Exp $	 */
-#ifndef lint
-static char vcid[] = "$Id: mrqcof_orbit.c,v 1.1 2006/11/22 20:31:50 observe Exp $";
-#endif /* lint */
-
 /* Altered version of Numerical Recipes "mrqcof" to deal with our situation
  * in which we are simultaneously fitting the x and y data.  Also have
  * made use of the existing "OBSERVATION" structure as input data.
@@ -28,7 +24,6 @@ void mrqcof_orbit(OBSERVATION obsarray[],
 {
 	int i,j,k,l,m,mfit=0;
 	double xmod,ymod,wtx,wty,sig2x,sig2y,dx,dy,*dyda,*dxda;
-	double distance;
 	double fb1;
 	PBASIS	params;
 	OBSERVATION *oo;
@@ -52,7 +47,7 @@ void mrqcof_orbit(OBSERVATION obsarray[],
 
 	for (i=1;i<=ndata;i++) {
 	        oo = &obsarray[i-1];
-		distance = kbo2d(&params,oo,&xmod,dxda,&ymod,dyda);
+		kbo2d(&params,oo,&xmod,dxda,&ymod,dyda);
 		sig2x=1.0/(oo->dthetax*oo->dthetax);
 		sig2y=1.0/(oo->dthetay*oo->dthetay);
 		dx=oo->thetax-xmod;

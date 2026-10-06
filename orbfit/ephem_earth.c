@@ -1,8 +1,4 @@
 /* 	$Id: ephem_earth.c,v 1.1 2006/11/22 20:31:50 observe Exp $	 */
-/* 	$Id: ephem_earth.c,v 1.1 2006/11/22 20:31:50 observe Exp $	 */
-#ifndef lint
-static char vcid[] = "$Id: ephem_earth.c,v 1.1 2006/11/22 20:31:50 observe Exp $"; 
-#endif /* lint */
 /*** ephem_earth.c  - I've changed the below to include a routine explicitly
 *** returning the location of earth geocenter relative to SSBARY.  Also
 *** have eliminated the nutation & libration routines.
@@ -524,7 +520,7 @@ void Interpolate_State(double Time,
 		       double Position[3], 
 		       double Velocity[3])
 {
-  double    A[50]   , B[50] , Cp[50] , P_Sum[3] , V_Sum[3] , Up[50] ,
+  double    A[50]   , Cp[50] , P_Sum[3] , V_Sum[3] , Up[50] ,
             T_break , T_seg , T_sub  , Tc;
   int       i , j;
   long int  C , G , N , offset = 0;
@@ -548,7 +544,6 @@ void Interpolate_State(double Time,
   for ( i=0 ; i<50 ; i++ )
       {
         A[i] = 0.0;
-        B[i] = 0.0;
       }
 
   /*--------------------------------------------------------------------------*/

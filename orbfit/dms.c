@@ -1,17 +1,15 @@
 /* 	$Id: dms.c,v 1.1 2006/11/22 20:31:50 observe Exp $	 */
 
-#ifndef lint
-static char vcid[] = "$Id: dms.c,v 1.1 2006/11/22 20:31:50 observe Exp $";
-#endif /* lint */
 /* convert a string to decimal degrees */
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <math.h>
 #include <string.h>
+#include "orbfit.h"
 
 double 
-dmsdeg(char *string)
+dmsdeg(const char *string)
 {
 	float args[3];
 	char substring[10];
@@ -51,7 +49,7 @@ dmsdeg(char *string)
 
 /* slight variation for hours:*/
 double 
-hmsdeg(char *string)
+hmsdeg(const char *string)
 {
 	return(15. * dmsdeg(string));
 }

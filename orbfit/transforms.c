@@ -1,8 +1,5 @@
 /* 	$Id: transforms.c,v 1.1 2006/11/22 20:31:50 observe Exp $	 */
 
-#ifndef lint
-static char vcid[] = "$Id: transforms.c,v 1.1 2006/11/22 20:31:50 observe Exp $";
-#endif /* lint */
 /*********** Coordinate transformation routines *************/
 /* All angles assumed to be in radians upon input */
 
@@ -16,7 +13,7 @@ eq_to_ec( double ra_eq,
 	  double *lon_ec,
 	  double **partials)
 {
-  double	sd,cd,cr,se,ce,y,x;
+  double	sd,cd,se,ce,y,x;
 
   se = sin(ECL);
   ce = cos(ECL);
@@ -75,7 +72,7 @@ ec_to_eq( double lat_ec,
 	  double *dec_eq,
 	  double **partials)
 {
-  double	sd,cd,cr,se,ce,y,x;
+  double	sd,cd,se,ce,y,x;
 
   se = sin(-ECL);
   ce = cos(ECL);
@@ -303,7 +300,7 @@ void
 orbitElements(XVBASIS *xv,
 	      ORBIT  *orb)
 {
-  int i,j,k;
+  int k;
 
   double combinedMass; /* mass of Sun + mass of KBO */ 
   double epochTime; 
@@ -325,8 +322,7 @@ orbitElements(XVBASIS *xv,
   double hMagnitude, ascendingNodeMagnitude; /* magnitude of angular momentum */
   double ascEccDotProduct, argumentOfPerifocus;
   double xBar, yBar;
-  double cosE, sinE, E1, E2, eccentricAnomaly;
-  /* E1 and E2 are used to decide the quadrant of Eccentric Anomaly */
+  double cosE, sinE, eccentricAnomaly;
   double meanAnomaly, meanMotion, timeOfPerifocalPassage;
 
   combinedMass = GM * 1.00134 ; /* Alter GM to account for total SS mass*/
@@ -462,7 +458,7 @@ elements_to_xv(ORBIT *o,
 	       double jd,
 	       XVBASIS *xv)
 {
-  double eccentricAnomaly, r0[3], v0[3], r1[3], v1[3], r2[3], v2[3];
+  double r0[3], v0[3], r1[3], v1[3], r2[3], v2[3];
   double meanAnomaly;
   double c, s, t, dt;
 

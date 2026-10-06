@@ -8,7 +8,6 @@ double *fitradec(char *mpc_filename, char *abg_filename)
 {
 
   FILE *abg_file ;
-  FILE *res_file ;
 
   OBSERVATION obsarray[MAXOBS];
   int     nobs;
@@ -21,7 +20,6 @@ double *fitradec(char *mpc_filename, char *abg_filename)
   static double result[2];
   double **covar;
   double chisq;
-  int i; 
   int dof;
 
   covar = dmatrix(1,6,1,6);
@@ -145,19 +143,13 @@ double *predict(char *abg_file, double jdate, int obscode)
 
   PBASIS p;
   OBSERVATION	futobs;
-  struct date_time dt;
-  char	inbuff[256], rastring[20], decstring[20];
-  char  outbuff[256];
-  char  *f_string;
   double **covar,**sigxy,a,b,PA,**derivs;
   double lat,lon,**covecl;
   double ra,dec, **coveq;
-  double yr,mo,day,hr,mn,ss;
   double xx,yy,xy,bovasqrd,det;
   double distance;
   static double result[8];
-  int i,nfields;
-  int iarg=1;
+  int i;
 
   sigxy = dmatrix(1,2,1,2);
   derivs = dmatrix(1,2,1,2);
@@ -239,8 +231,6 @@ double *abg_to_aei(char *abg_file)
   static double result[15];
   double d, dd;
   double  **covar_abg, **covar_xyz, **derivs, **covar_aei;
-
-  int	i,j;
 
   covar_abg = dmatrix(1,6,1,6);
   covar_xyz = dmatrix(1,6,1,6);

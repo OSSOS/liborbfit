@@ -1,8 +1,5 @@
 /* 	$Id: aeiderivs.c,v 2.0 2001/09/14 19:05:06 garyb Exp $	 */
 
-#ifndef lint
-static char vcid[] = "$Id: aeiderivs.c,v 2.0 2001/09/14 19:05:06 garyb Exp $";
-#endif /* lint */
 /* Subroutine to determine partial derivative matrix of orbital params
  * w.r.t. barycentric phase space params.  Incredible algebra by Bharat.
  */

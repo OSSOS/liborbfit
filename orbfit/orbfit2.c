@@ -1,8 +1,5 @@
 /* 	$Id: orbfit2.c,v 2.0 2001/09/14 19:05:06 garyb Exp $	 */
 
-#ifndef lint
-static char vcid[] = "$Id: orbfit2.c,v 2.0 2001/09/14 19:05:06 garyb Exp $";
-#endif /* lint */
 /***** Routines that execute the fit of orbit to observation data. ****/
 /*** assembled 6/14/00 gmb from subroutines scattered about elsewhere.
 ** will use the mrqmin_orbit and mrqcof_orbit subroutines as well.
@@ -51,7 +48,7 @@ fit_observations(OBSERVATION obsarray[],
 		 int *dof,
 		 FILE *logfile)
 {
-  int	*ia,i,j;
+  int	*ia,i;
   double *a;
   double gbind2;
   double energy_fit;	/*weight given to binding-energy constraint*/
