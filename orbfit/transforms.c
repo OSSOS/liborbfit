@@ -454,7 +454,7 @@ date_to_jd(struct date_time date)
 	short dint;
 
 	if((date.y <= 1900) | (date.y >= 2100)) {
-		printf("Date out of range.  1900 - 2100 only.\n");
+		orbfit_error("Date year %d out of range.  1900 - 2100 only.", date.y);
 		return(0.);
 	}
 
@@ -493,8 +493,7 @@ elements_to_xv(ORBIT *o,
   double mu = GM*SSMASS;	/*use SSMASS, work in AU/yrs*/
 
   if (o->e >= 1. || o->a <=0.) {
-    fprintf(stderr,"elements_to_xv only for closed orbits now\n");
-    exit(1);
+    orbfit_fail("elements_to_xv only for closed orbits now");
   }
 
   /* get the eccentric Anomaly from the mean anomaly */
@@ -513,9 +512,8 @@ elements_to_xv(ORBIT *o,
     f   = x1 - o->e * sin(x1) - meanAnomaly;
     fmid= x2 - o->e * sin(x2) - meanAnomaly;
     if (f*fmid > 0.0) {
-      fprintf(stderr,"Error, eccentricAnomaly root not bracketed\n");
-      fprintf(stderr,"f, fmid %f %f\n",f,fmid);
-      exit(1);
+      orbfit_fail("Error, eccentricAnomaly root not bracketed: f, fmid %f %f",
+		  f, fmid);
     }
 
     rtb = f < 0.0 ? (dx=x2-x1,x1) : (dx=x1-x2,x2);
@@ -526,8 +524,7 @@ elements_to_xv(ORBIT *o,
       if (fabs(dx) < TOLERANCE || fmid == 0.0) break;
     }
     if (j>=JMAX) {
-      fprintf(stderr,"eccentricAnomaly took too long\n");
-      exit(1);
+      orbfit_fail("eccentricAnomaly took too long");
     }
     meanAnomaly = rtb;
 #undef JMAX

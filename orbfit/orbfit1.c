@@ -199,6 +199,9 @@ fgets_nocomment(char *inbuff, int length,
  * part of OBSERVATION structure, ra & dec in the x & y parts.  Format
  * error returns non-zero.
  */
+/* Length and text of a line without its newline, for "%.*s" */
+#define LINE(s) (int) strcspn((s), "\r\n"), (s)
+
 /* Read a signed coordinate from the second line of an MPC satellite
  * observation: sign in column sign_col, value in the next 11 columns. */
 static int
@@ -231,18 +234,18 @@ int scan_observation(char *inbuff, OBSERVATION *obs, OBSERVATION *previous)
        * AU (column 33 = 2). */
       double x, y, z, scale;
       if (previous == NULL) {
-        fprintf(stderr,"Satellite position line without an observation:\n ->%s\n",inbuff);
+        orbfit_error("Satellite position line without an observation:\n ->%.*s", LINE(inbuff));
         return(1);
       }
       if (inbuff[32] == '1') scale = 1.;
       else if (inbuff[32] == '2') scale = AU_KM;
       else {
-        fprintf(stderr,"Unknown units in satellite position line:\n ->%s\n",inbuff);
+        orbfit_error("Unknown units in satellite position line:\n ->%.*s", LINE(inbuff));
         return(1);
       }
       if (mpc_signed_value(inbuff, 34, &x) || mpc_signed_value(inbuff, 46, &y)
           || mpc_signed_value(inbuff, 58, &z)) {
-        fprintf(stderr,"Format error in satellite position line:\n ->%s\n",inbuff);
+        orbfit_error("Format error in satellite position line:\n ->%.*s", LINE(inbuff));
         return(1);
       }
       previous->xe = x*scale;
@@ -253,7 +256,7 @@ int scan_observation(char *inbuff, OBSERVATION *obs, OBSERVATION *previous)
 
     copy_columns(inbuff, 15, 32, field);
     if (sscanf(field,"%d %d %lf",&(dd.y),&(dd.mo),&(dd.d))!=3) {
-      fprintf(stderr,"Format error in observation file:\n ->%s\n",inbuff);
+      orbfit_error("Format error in observation file:\n ->%.*s", LINE(inbuff));
       return(1);
     }
     dd.h = dd.mn = dd.s = 0.;
@@ -262,7 +265,7 @@ int scan_observation(char *inbuff, OBSERVATION *obs, OBSERVATION *previous)
     copy_columns(inbuff, 44, 56, decstring);
     copy_columns(inbuff, 77, 80, field);
     if (sscanf(field,"%15s",codestring) != 1) {
-      fprintf(stderr,"Missing observatory code:\n ->%s\n",inbuff);
+      orbfit_error("Missing observatory code:\n ->%.*s", LINE(inbuff));
       return(1);
     }
     obs->obscode = obscode_from_string(codestring);
@@ -275,7 +278,7 @@ int scan_observation(char *inbuff, OBSERVATION *obs, OBSERVATION *previous)
                  &(dd.y), &(dd.mo), &(dd.d), rastring, decstring,
                  &(obs->dthetay),
                  codestring) != 7) {
-          fprintf(stderr, "Format error in observation file:\n ->%s\n", inbuff);
+          orbfit_error("Format error in observation file:\n ->%.*s", LINE(inbuff));
           return (1);
       }
       obs->obscode = obscode_from_string(codestring);
@@ -288,7 +291,7 @@ int scan_observation(char *inbuff, OBSERVATION *obs, OBSERVATION *previous)
                      &jd, rastring, decstring,
                      &(obs->dthetay),
                      codestring) != 5) {
-              fprintf(stderr, "Format error in observation file:\n ->%s\n", inbuff);
+              orbfit_error("Format error in observation file:\n ->%.*s", LINE(inbuff));
               return (1);
           }
           obs->obscode = obscode_from_string(codestring);
@@ -335,7 +338,7 @@ read_radec(OBSERVATION obsarray[], char *fname, int *nobs)
   if (fname==NULL)
     fptr = stdin;
   else if ( (fptr=fopen(fname,"r"))==NULL) {
-    fprintf(stderr,"Error opening observations file %s\n",fname);
+    orbfit_error("Error opening observations file %s",fname);
     return(1);
   }
 
@@ -353,14 +356,13 @@ read_radec(OBSERVATION obsarray[], char *fname, int *nobs)
 
     // all other non-zero status values indicate an error.
     if ( scan_status_flag == 1) {
-      fprintf(stderr,"Quitting on format error\n");
       if (fname!=NULL) fclose(fptr);
       return(1);
     }
 
     if (*nobs >= MAXOBS) {
-      fprintf(stderr,"More than %d observations in %s\n", MAXOBS,
-	      fname==NULL ? "input" : fname);
+      orbfit_error("More than %d observations in %s", MAXOBS,
+		   fname==NULL ? "input" : fname);
       if (fname!=NULL) fclose(fptr);
       return(1);
     }
@@ -438,46 +440,47 @@ read_abg(char *fname,
   if (fname==NULL)
     fptr = stdin;
   else if ( (fptr=fopen(fname,"r"))==NULL) {
-    fprintf(stderr,"Error opening a/b/g orbit file %s\n",fname);
+    orbfit_error("Error opening a/b/g orbit file %s",fname);
     return(1);
   }
+  if (fname==NULL) fname = "input";
 
   /* Skipping comments, read the a/b/g specs*/
   if (fgets_nocomment(inbuff,255,fptr,NULL)==NULL) {
-    fprintf(stderr,"Data missing from a/b/g/ data file.\n");
+    orbfit_error("Data missing from a/b/g data file %s", fname);
     goto done;
   }
 
   if (sscanf(inbuff, "%lf %lf %lf %lf %lf %lf",
 	     &(p->a),&(p->adot),&(p->b),&(p->bdot),
 	     &(p->g),&(p->gdot)) != 6) {
-    fprintf(stderr,"Error reading a/b/g data\n");
+    orbfit_error("Error reading a/b/g data from %s", fname);
     goto done;
   }
 
   for (i=1; i<=6; i++) {
     if (fgets_nocomment(inbuff,255,fptr,NULL)==NULL) {
-      fprintf(stderr,"Data missing from a/b/g/ covariance.\n");
+      orbfit_error("Data missing from a/b/g covariance in %s", fname);
       goto done;
     }
 
     if (sscanf(inbuff, "%lf %lf %lf %lf %lf %lf",
 	       &covar[i][1],&covar[i][2],&covar[i][3],
 	       &covar[i][4],&covar[i][5],&covar[i][6]) != 6) {
-      fprintf(stderr,"Error reading a/b/g covariance\n");
+      orbfit_error("Error reading a/b/g covariance from %s", fname);
       goto done;
     }
   }
 
   /* Now read the coordinate system info */
   if (fgets_nocomment(inbuff,255,fptr,NULL)==NULL) {
-    fprintf(stderr,"Data missing from a/b/g/ data file.\n");
+    orbfit_error("Coordinate system missing from a/b/g data file %s", fname);
     goto done;
   }
 
   if (sscanf(inbuff, "%lf %lf %lf %lf %lf %lf",
 	     &lat0, &lon0, &xBary, &yBary, &zBary, &jd0) != 6) {
-    fprintf(stderr,"Error reading coord system info\n");
+    orbfit_error("Error reading coordinate system from %s", fname);
     goto done;
   }
   lat0 *= DTOR;
@@ -485,7 +488,7 @@ read_abg(char *fname,
   status = 0;
 
 done:
-  if (fname!=NULL) fclose(fptr);
+  if (fptr!=stdin) fclose(fptr);
   return(status);
 }
 
@@ -813,9 +816,8 @@ matrix_multiply(double **m1, double **m2,
   double	sum;
 
   if (x1!=y2) {
-    fprintf(stderr,"Trying to multiply mismatched matrices, "
-	    " %d x %d  times %d x %d\n", y1,x1,y2,x2);
-    exit(1);
+    orbfit_fail("Trying to multiply mismatched matrices, "
+		" %d x %d  times %d x %d", y1,x1,y2,x2);
   }
   for (i=1; i<=y1; i++)
     for (k=1; k<=x2; k++) {
@@ -910,6 +912,16 @@ accel_nbody(double *xx,
   return;
 }
 
+/* kbo3d keeps the integrator state between calls with the same orbit */
+static int kbo3d_init = 0;
+
+/* Discard that state, e.g. after a failure part way through a step */
+void
+kbo3d_reset(void)
+{
+  kbo3d_init = 0;
+}
+
 /* Give the KBO's 3-d position, along with derivatives. */
 /* Here is a leapfrog-integrator version.*/
 void    
@@ -924,13 +936,12 @@ kbo3d(PBASIS *pin,
   int   i, restart=1;
   static double x[3],v[3],a[3], tx, tv, z0;
   static PBASIS psave;
-  static int init=0;
   static int tdir;
   double t1,dt,dtv;
 
   /* decide whether we need to reset integrator to t=0*/
-  if (!init) {
-    init = 1;
+  if (!kbo3d_init) {
+    kbo3d_init = 1;
     restart = 1;
   } else if (pin->a==psave.a && pin->adot==psave.adot &&
 	     pin->b==psave.b && pin->bdot==psave.bdot &&
@@ -1102,8 +1113,7 @@ zenith_angle(OBSERVATION *obs)
 			&xobs, &yobs, &zobs);
   r = sqrt(xobs*xobs+yobs*yobs+zobs*zobs);
   if (r<=0.) {
-    fprintf(stderr,"Non-positive geocentric radius in zenith_angle()\n");
-    exit(1);
+    orbfit_fail("Non-positive geocentric radius in zenith_angle()");
   }
   xobs /=r; yobs/=r; zobs/=r;
   /* Rotate this ICRS vector into ecliptic, then projected coords */
@@ -1148,53 +1158,4 @@ fake_observation(PBASIS *p,
   obs->thetay += obs->dthetay*gasdev(&idum);
 
   return;
-}
-
-/* Parse command-line looking for the standard options.
- * iarg is first arg to examine, and is returned as the
- * first non-option argument.
- * Returns 1 on parse error.
- * currently understands m, j, o, and v options.
- */
-#define BUFFSIZE 512
-int
-read_options(int* iarg, 
-	     int argc,
-	     char *argv[])
-{
-  double d;
-  for ( ; *iarg<argc; (*iarg)++) {
-    if (argv[*iarg][0]!='-')
-      return(0);	/*quit, now at non-option argument.*/
-
-    if (strcasecmp(argv[*iarg]+1,"m")==0) {
-      /* MPC error size */
-      d = atof(argv[++(*iarg)]);
-      if (d<=0.) {
-	fprintf(stderr,"Bad MPC error spec %s\n",argv[*iarg]);
-	return(1);
-      }
-      set_mpc_dtheta(d);
-
-    } else if (strcasecmp(argv[*iarg]+1,"o")==0) {
-      /* observatory file name*/
-      set_observatory_file(argv[++(*iarg)]);
-
-    } else if (strcasecmp(argv[*iarg]+1,"j")==0) {
-      /* ephemeris file name*/
-      set_ephem_file(argv[++(*iarg)]);
-
-    } else if (strcasecmp(argv[*iarg]+1,"v")==0) {
-      /* version number request - quit after */
-      printf("KBO orbit-fitting software Release is $Name:  $\n");
-      printf("Contact Gary Bernstein for information on use,\n");
-      printf("  problems, and credit for this software.\n");
-      exit(1);
-
-    } else {
-      fprintf(stderr,"Unknown option %s\n",argv[*iarg]);
-      return(1);
-    }
-  }
-  return(0);
 }

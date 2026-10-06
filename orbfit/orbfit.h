@@ -239,12 +239,6 @@ set_ephem_file(char *fname);
 void
 set_observatory_file(char *fname);
 
-/* Read these options */
-int
-read_options(int* iarg, 
-	     int argc,
-	     char *argv[]);
-
 /* preliminary fit to observations */
 void
 prelim_fit(OBSERVATION obsarray[],
@@ -381,5 +375,27 @@ void geo_to_ssbary(double jd, double *x, double *y, double *z);
 /* Copy 0-indexed columns [start, end) of line into out (size end-start+1),
  * stopping at the end of the line. */
 void copy_columns(const char *line, int start, int end, char *out);
+
+/* Error handling (orbfit_error.c).  orbfit_error() records and prints a
+ * message.  orbfit_fail() does the same and then longjmps to the guard
+ * installed by orbfit_begin(), or exits if there is none; orbfit_rethrow()
+ * jumps with the message already recorded.  An entry point calls setjmp()
+ * on its guard, then orbfit_begin(), and orbfit_end() before returning. */
+#include <setjmp.h>
+#ifdef __GNUC__
+#define ORBFIT_PRINTF __attribute__((format(printf, 1, 2)))
+#define ORBFIT_NORETURN __attribute__((noreturn))
+#else
+#define ORBFIT_PRINTF
+#define ORBFIT_NORETURN
+#endif
+void orbfit_error(const char *fmt, ...) ORBFIT_PRINTF;
+void orbfit_fail(const char *fmt, ...) ORBFIT_PRINTF ORBFIT_NORETURN;
+void orbfit_rethrow(void) ORBFIT_NORETURN;
+void orbfit_begin(jmp_buf *guard);
+void orbfit_end(void);
+
+/* Forget integrator state left by an interrupted calculation */
+void kbo3d_reset(void);
 
 #endif

@@ -35,8 +35,7 @@ dmsdeg(const char *string)
 	  j = sscanf(string+i,"%31[-+.0-9]",substring);
 	  if (j==EOF || *(string+i)==0) break;
 	  else if (j!=1) {
-	    fprintf(stderr,"Error interpeting dms ->%s<-\n",string);
-	    return(0.);
+	    orbfit_fail("Error interpreting dms ->%s<-",string);
 	  }
 	  args[iarg] = atof(substring);
 	  i += strlen(substring);

@@ -1,6 +1,9 @@
 /* Entry points of the orbfit shared library, as called from mp_ephem/bk_orbit.py
  * through ctypes.  Each returns a pointer to a static result array that is
- * overwritten by the next call; the library is not reentrant. */
+ * overwritten by the next call; the library is not reentrant.
+ *
+ * On failure the results are NaN and orbfit_last_error() describes the
+ * problem; it is the empty string after a successful call. */
 #ifndef ORBFIT_API_H
 #define ORBFIT_API_H
 
@@ -18,5 +21,8 @@ double *predict_helio(char *abg_file, double jdate, int obscode);
 /* a, e, i, Node, peri, T, their uncertainties, epoch, distance and distance
  * uncertainty for the orbit in abg_file. */
 double *abg_to_aei(char *abg_file);
+
+/* Message from the last failed call, or "" */
+const char *orbfit_last_error(void);
 
 #endif

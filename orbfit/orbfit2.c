@@ -55,7 +55,7 @@ fit_observations(OBSERVATION obsarray[],
   int   fitparms=6;
 
   if (nobs<2) {
-    fprintf(stderr,"ERROR: not enough observations nobs=%d\n",nobs);
+    orbfit_error("Not enough observations to fit an orbit: nobs=%d",nobs);
     return -1;
   }
 
