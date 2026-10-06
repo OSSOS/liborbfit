@@ -117,7 +117,7 @@ kbo2d(PBASIS *pin,
   }
   /* incorporate derivative w.r.t simplified time delay */
   if (dx!=NULL) dx[5] += vk[0]*invz*invz/SPEED_OF_LIGHT;
-  if (dx!=NULL) dy[5] += vk[1]*invz*invz/SPEED_OF_LIGHT;
+  if (dy!=NULL) dy[5] += vk[1]*invz*invz/SPEED_OF_LIGHT;
  
   return distance;
 }
@@ -321,12 +321,13 @@ int scan_observation(char *inbuff, OBSERVATION *obs, OBSERVATION *previous)
  * set up the tangent point and jd0 to correspond to 1st observation.
  */
 /* Blank & commented lines are skipped */
-/* Input file is stdin if fname==NULL */
+/* Input file is stdin if fname==NULL.  obsarray holds MAXOBS entries.
+ * Returns non-zero on error. */
 int
 read_radec(OBSERVATION obsarray[], char *fname, int *nobs)
 {
   FILE *fptr;
-  OBSERVATION  *obs = NULL;
+  OBSERVATION  *obs = NULL, scanned;
   int  scan_status_flag;
   char	inbuff[256];
   double elat,elon;
@@ -335,14 +336,14 @@ read_radec(OBSERVATION obsarray[], char *fname, int *nobs)
     fptr = stdin;
   else if ( (fptr=fopen(fname,"r"))==NULL) {
     fprintf(stderr,"Error opening observations file %s\n",fname);
-    exit(1);
+    return(1);
   }
 
   *nobs=0;
   while ( fgets_nocomment(inbuff,255,fptr,NULL)!=NULL) {
 
     // obs refers to the previous observation, after the first loop.
-    scan_status_flag = scan_observation(inbuff, &(obsarray[*nobs]), obs);
+    scan_status_flag = scan_observation(inbuff, &scanned, obs);
 
     // scanned line was 2nd line of two line format so don't advance nobs as all we did was reset the observer x/y
     if (scan_status_flag == -1) {
@@ -353,10 +354,18 @@ read_radec(OBSERVATION obsarray[], char *fname, int *nobs)
     // all other non-zero status values indicate an error.
     if ( scan_status_flag == 1) {
       fprintf(stderr,"Quitting on format error\n");
-      exit(1);
+      if (fname!=NULL) fclose(fptr);
+      return(1);
     }
 
+    if (*nobs >= MAXOBS) {
+      fprintf(stderr,"More than %d observations in %s\n", MAXOBS,
+	      fname==NULL ? "input" : fname);
+      if (fname!=NULL) fclose(fptr);
+      return(1);
+    }
     obs = &(obsarray[*nobs]);
+    *obs = scanned;
     (*nobs)++;
 
     eq_to_ec(obs->thetax,obs->thetay,&elat,&elon,NULL);
@@ -423,7 +432,7 @@ read_abg(char *fname,
 	 double **covar)
 {
   FILE *fptr;
-  int  i;
+  int  i, status = 1;
   char	inbuff[256];
 
   if (fname==NULL)
@@ -436,46 +445,48 @@ read_abg(char *fname,
   /* Skipping comments, read the a/b/g specs*/
   if (fgets_nocomment(inbuff,255,fptr,NULL)==NULL) {
     fprintf(stderr,"Data missing from a/b/g/ data file.\n");
-    return(1);
+    goto done;
   }
 
   if (sscanf(inbuff, "%lf %lf %lf %lf %lf %lf",
 	     &(p->a),&(p->adot),&(p->b),&(p->bdot),
 	     &(p->g),&(p->gdot)) != 6) {
     fprintf(stderr,"Error reading a/b/g data\n");
-    return(1);
+    goto done;
   }
 
   for (i=1; i<=6; i++) {
     if (fgets_nocomment(inbuff,255,fptr,NULL)==NULL) {
       fprintf(stderr,"Data missing from a/b/g/ covariance.\n");
-      return(1);
+      goto done;
     }
 
     if (sscanf(inbuff, "%lf %lf %lf %lf %lf %lf",
 	       &covar[i][1],&covar[i][2],&covar[i][3],
 	       &covar[i][4],&covar[i][5],&covar[i][6]) != 6) {
       fprintf(stderr,"Error reading a/b/g covariance\n");
-      return(1);
+      goto done;
     }
   }
 
   /* Now read the coordinate system info */
   if (fgets_nocomment(inbuff,255,fptr,NULL)==NULL) {
     fprintf(stderr,"Data missing from a/b/g/ data file.\n");
-    return(1);
+    goto done;
   }
 
   if (sscanf(inbuff, "%lf %lf %lf %lf %lf %lf",
 	     &lat0, &lon0, &xBary, &yBary, &zBary, &jd0) != 6) {
     fprintf(stderr,"Error reading coord system info\n");
-    return(1);
+    goto done;
   }
   lat0 *= DTOR;
   lon0 *= DTOR;
+  status = 0;
 
+done:
   if (fname!=NULL) fclose(fptr);
-  return(0);
+  return(status);
 }
 
 /* Take a set of observations and make a preliminary fit using the
@@ -541,9 +552,19 @@ prelim_fit(OBSERVATION obsarray[],
 
 
   if (invert_matrix(alpha,covar,5)) {
-    /* some failure in the inversion...*/
-    fprintf(stderr,"Error inverting the alpha matrix\n");
-    exit(1);
+    /* Linear fit is degenerate: flag it with a negative gamma variance so
+     * fit_observations falls back to the gdot=0, energy-constrained fit. */
+    for (i=1; i<=6; i++)
+      for (j=1; j<=6; j++) covar[i][j]=0.;
+    covar[5][5] = -1.;
+    pout->a = pout->adot = pout->b = pout->bdot = pout->gdot = 0.;
+    pout->g = 0.03;
+    free_dvector(dx,1,6);
+    free_dvector(dy,1,6);
+    free_dvector(soln,1,6);
+    free_dvector(beta,1,6);
+    free_dmatrix(alpha,1,6,1,6);
+    return;
   }
 
   /* Now multiply matrices to get the solution vector */
@@ -619,23 +640,28 @@ int
 invert_matrix(double **in, double **out,
               int dim)
 {
-  int   *indx,i,j;
+  int   *indx,i,j,status=0;
   double *tvec,det;
 
   tvec = dvector(1,dim);
   indx = ivector(1,dim);
-  ludcmp(in,dim,indx,&det);
-
-  for (j=1; j<=dim; j++) {
-    for (i=1; i<=dim; i++) tvec[i]=0.;
-    tvec[j] = 1.0;
-    lubksb(in,dim,indx,tvec);
-    for (i=1; i<=dim; i++) out[i][j]=tvec[i];
+  if (ludcmp(in,dim,indx,&det)) {
+    status = 1;
+  } else {
+    for (j=1; j<=dim; j++) {
+      for (i=1; i<=dim; i++) tvec[i]=0.;
+      tvec[j] = 1.0;
+      lubksb(in,dim,indx,tvec);
+      for (i=1; i<=dim; i++) {
+	out[i][j]=tvec[i];
+	if (!isfinite(tvec[i])) status = 1;
+      }
+    }
   }
 
-  free_ivector(indx,1,6);
-  free_dvector(tvec,1,6);
-  return(0);
+  free_ivector(indx,1,dim);
+  free_dvector(tvec,1,dim);
+  return(status);
 }
 
 void
@@ -967,7 +993,7 @@ kbo3d(PBASIS *pin,
     vout[i] = v[i] + a[i]*(t-tv);
   }
   /* x and y derivatives w.r.t. parameters  - inertial approx ok here*/
-  if (dx== NULL || dy==NULL || dx==NULL) return;
+  if (dx== NULL || dy==NULL || dz==NULL) return;
 
   for (i=1; i<=6; i++) dx[i]=dy[i]=dz[i]=0.;
   dx[1] = dy[3] = z0;

@@ -2,7 +2,8 @@
 #include "nrutil.h"
 #define TINY 1.0e-20;
 
-void ludcmp(double **a, int n, int *indx, double *d)
+/* Returns non-zero if a row of a is zero or not finite. */
+int ludcmp(double **a, int n, int *indx, double *d)
 {
 	int i,imax,j,k;
 	double big,dum,sum,temp;
@@ -14,7 +15,10 @@ void ludcmp(double **a, int n, int *indx, double *d)
 		big=0.0;
 		for (j=1;j<=n;j++)
 			if ((temp=fabs(a[i][j])) > big) big=temp;
-		if (big == 0.0) nrerror("Singular matrix in routine LUDCMP");
+		if (big == 0.0 || !isfinite(big)) {
+			free_dvector(vv,1,n);
+			return 1;
+		}
 		vv[i]=1.0/big;
 	}
 	for (j=1;j<=n;j++) {
@@ -24,6 +28,7 @@ void ludcmp(double **a, int n, int *indx, double *d)
 			a[i][j]=sum;
 		}
 		big=0.0;
+		imax=j;
 		for (i=j;i<=n;i++) {
 			sum=a[i][j];
 			for (k=1;k<j;k++)
@@ -51,6 +56,7 @@ void ludcmp(double **a, int n, int *indx, double *d)
 		}
 	}
 	free_dvector(vv,1,n);
+	return 0;
 }
 
 #undef TINY

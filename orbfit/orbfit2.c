@@ -38,7 +38,8 @@ mrqfit(OBSERVATION *obsarray,
  * covar should be 6x6 dmatrix upon entry, will hold covariance on exit.
  * Info on the fit is sent to logfile if it is non-NULL.
  */
-/* Return value is 5 if energy constraint is used, 6 otherwise */
+/* Return value is the number of fitted parameters: 4 if gdot is fixed,
+ * 5 if the energy constraint is used, 6 otherwise; -1 if nobs < 2. */
 int
 fit_observations(OBSERVATION obsarray[],
 		 int nobs,
@@ -49,18 +50,20 @@ fit_observations(OBSERVATION obsarray[],
 		 FILE *logfile)
 {
   int	*ia,i;
-  double *a;
   double gbind2;
   double energy_fit;	/*weight given to binding-energy constraint*/
   int   fitparms=6;
-  a     = dvector(1,6);
+
+  if (nobs<2) {
+    fprintf(stderr,"ERROR: not enough observations nobs=%d\n",nobs);
+    return -1;
+  }
+
   ia    = ivector(1,6);
   energy_fit = 0.;
 
   /* Don't even try the no-energy fit unless there are 3 observations*/
-  if (nobs<2) {
-    fprintf(stderr,"ERROR: not enough observations nobs=%d\n",nobs);
-  } else if (nobs==2) {
+  if (nobs==2) {
     fitparms=4;
   } else {
     prelim_fit(obsarray,nobs,p,covar);
@@ -140,7 +143,6 @@ fit_observations(OBSERVATION obsarray[],
     mrqfit(obsarray, nobs, p, ia, covar, chisq, energy_fit);
   }
 
-  free_dvector(a,1,6);
   free_ivector(ia,1,6);
 
   if (fitparms==4) {
@@ -213,6 +215,8 @@ mrqfit(OBSERVATION *obsarray,
    p->g = a[5];
    p->gdot = a[6];
 
+   free_dvector(a,1,6);
+   free_dmatrix(alpha,1,6,1,6);
    return;
 }
 

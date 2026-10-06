@@ -4,90 +4,77 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+static void
+fill_nan(double *result, int n)
+{
+  int i;
+  for (i = 0; i < n; i++) result[i] = NAN;
+}
+
 double *fitradec(char *mpc_filename, char *abg_filename)
 {
-
-  FILE *abg_file ;
-
-  OBSERVATION obsarray[MAXOBS];
-  int     nobs;
-
-  ORBIT orbit;
-  PBASIS p;
-  XVBASIS xv;
-
-  double d, dd;
   static double result[2];
-  double **covar;
+  FILE *abg_file = NULL;
+  OBSERVATION *obsarray = NULL;
+  int     nobs;
+  PBASIS p;
+  double d, dd;
+  double **covar = NULL;
   double chisq;
   int dof;
 
-  covar = dmatrix(1,6,1,6);
+  fill_nan(result, 2);
 
+  obsarray = malloc(MAXOBS*sizeof(OBSERVATION));
+  if (obsarray == NULL) {
+    fprintf(stderr, "Out of memory for observations\n");
+    goto cleanup;
+  }
+  covar = dmatrix(1,6,1,6);
 
   if (read_radec(obsarray, mpc_filename, &nobs)) {
     fprintf(stderr, "Error reading input observations\n");
-    return result ;
+    goto cleanup;
   }
 
-   /*
-  for (i=0;i<nobs;i++) {
-    fprintf(stderr, "%lf %d %lf %lf %lf\n", obsarray[i].obstime, obsarray[i].obscode,
-            obsarray[i].xe, obsarray[i].ye, obsarray[i].ze);
-  }
-  */
   /* Call subroutine to do the actual fitting: */
-  fit_observations(obsarray, nobs, &p, covar, &chisq, &dof, NULL);
+  if (fit_observations(obsarray, nobs, &p, covar, &chisq, &dof, NULL) < 0)
+    goto cleanup;
 
+  if ((abg_file = fopen(abg_filename,"w")) == NULL) {
+    fprintf(stderr, "Error opening a/b/g output file %s\n", abg_filename);
+    goto cleanup;
+  }
 
-  abg_file = fopen(abg_filename,"w");
-
-  /* fprintf(stderr, "# Chi-squared of fit: %.2f DOF: %d\n",chisq,dof); */
   fprintf(abg_file, "# Exact a, adot, b, bdot, g, gdot:\n");
   fprintf(abg_file, "%.17g %.17g %.17g %.17g %.17g %.17g\n",p.a,p.adot,p.b,
   	p.bdot, p.g, p.gdot);
-  pbasis_to_bary(&p, &xv, NULL);
-
-  orbitElements(&xv, &orbit);
-  /* fprintf(stderr, "# a=%f AU,e=%f,i=%f deg\n",orbit.a, orbit.e, orbit.i); */
-  d = sqrt(xBary*xBary + yBary*yBary + pow(zBary-1/p.g,2.));
-  dd = d*d*sqrt(covar[5][5]);
-  /* fprintf(stderr, "# Barycentric distance %.3f+-%.3f\n",d,dd); */
-
-  /* Print the covariance matrix to the agb_file */
-  /* write the covariance to the agbfile */
 
   fprintf(abg_file, "# Covariance matrix: \n");
-
   print_matrix(abg_file, covar, 6, 6);
-
-
 
   /* Print out information on the coordinate system */
   fprintf(abg_file, "#     lat0       lon0       xBary     yBary      zBary   JD0\n");
   fprintf(abg_file, "%.17g %.17g %.17g %.17g %.17g %.17g\n",
 	 lat0/DTOR,lon0/DTOR,xBary,yBary,zBary,jd0);
 
-  fclose(abg_file);
-
-  /* Dump residuals to res_file */
-  /*
-  res_file = stderr;
-  fprintf(res_file,"Best fit orbit gives:\n");
-  fprintf(res_file,"obs  time        x      x_resid       y   y_resid\n");
-  for (i=0; i<nobs; i++) {
-    double x,y;
-    kbo2d(&p, &obsarray[i], &x, NULL, &y, NULL);
-    fprintf(res_file,"%3d %9.4f %10.3f %7.3f %10.3f %7.3f\n",
-	    i, obsarray[i].obstime,
-	    obsarray[i].thetax/ARCSEC, (obsarray[i].thetax-x)/ARCSEC,
-	    obsarray[i].thetay/ARCSEC, (obsarray[i].thetay-y)/ARCSEC);
+  if (fclose(abg_file) != 0) {
+    abg_file = NULL;
+    fprintf(stderr, "Error writing a/b/g output file %s\n", abg_filename);
+    goto cleanup;
   }
-  */
+  abg_file = NULL;
 
-  free_dmatrix(covar,1,6,1,6);
+  /* Barycentric distance and its uncertainty */
+  d = sqrt(xBary*xBary + yBary*yBary + pow(zBary-1/p.g,2.));
+  dd = d*d*sqrt(covar[5][5]);
   result[0] = d;
   result[1] = dd;
+
+cleanup:
+  if (abg_file != NULL) fclose(abg_file);
+  free_dmatrix(covar,1,6,1,6);
+  free(obsarray);
   return result;
 }
 
@@ -98,24 +85,19 @@ double *fitradec(char *mpc_filename, char *abg_filename)
 
 double *predict_helio(char *abg_file, double jdate, int obscode) {
 
+  static double result[3];
   PBASIS p;
   OBSERVATION futobs;
-  static double result[4];
   double xk[3];
   double **covar;
-  int i;
 
+  fill_nan(result, 3);
   covar = dmatrix(1,6,1,6);
-
-  for (i = 0; i < 4; i++) {
-    result[i] = -1.0;
-  }
 
   if (read_abg(abg_file, &p, covar)) {
     fprintf(stderr, "Error input alpha/beta/gamma file %s\n", abg_file);
-    return result;
+    goto cleanup;
   }
-
 
   /* get observatory code */
   futobs.obscode = obscode;
@@ -123,16 +105,17 @@ double *predict_helio(char *abg_file, double jdate, int obscode) {
   futobs.obstime = (jdate - jd0) * DAY;
   futobs.xe = -999.;        /* Force evaluation of earth3d */
 
-
   kbo3d_helio(&p, &futobs, xk);
 
   result[0] = xk[0];
   result[1] = xk[1];
   result[2] = xk[2];
 
+cleanup:
+  free_dmatrix(covar,1,6,1,6);
   return result;
-
 }
+
 /* predict.c - Read a file containing a/b/g orbit fit, and spit out
  *  predicted RA & dec plus uncertainties on arbitrary date.
  * 8/12/99 gmb
@@ -140,7 +123,7 @@ double *predict_helio(char *abg_file, double jdate, int obscode) {
 
 double *predict(char *abg_file, double jdate, int obscode)
 {
-
+  static double result[8];
   PBASIS p;
   OBSERVATION	futobs;
   double **covar,**sigxy,a,b,PA,**derivs;
@@ -148,24 +131,18 @@ double *predict(char *abg_file, double jdate, int obscode)
   double ra,dec, **coveq;
   double xx,yy,xy,bovasqrd,det;
   double distance;
-  static double result[8];
-  int i;
 
+  fill_nan(result, 8);
   sigxy = dmatrix(1,2,1,2);
   derivs = dmatrix(1,2,1,2);
   covar = dmatrix(1,6,1,6);
   covecl = dmatrix(1,2,1,2);
   coveq = dmatrix(1,2,1,2);
 
-    for (i=0;i<8;i++){
-        result[i] = -1.0;
-    }
-
   if (read_abg(abg_file,&p,covar) ) { 
     fprintf(stderr, "Error input alpha/beta/gamma file %s\n",abg_file);
-    return result;
+    goto cleanup;
   }
-
 
   /* get observatory code */
   futobs.obscode=obscode;
@@ -175,8 +152,6 @@ double *predict(char *abg_file, double jdate, int obscode)
 
   distance = predict_posn(&p,covar,&futobs,sigxy);
 
-
-  
   /* Now transform to RA/DEC, via ecliptic*/
   proj_to_ec(futobs.thetax,futobs.thetay,
 	     &lat, &lon,
@@ -207,39 +182,45 @@ double *predict(char *abg_file, double jdate, int obscode)
   dec /= DTOR;
   lat /= DTOR;
   lon /= DTOR;
-    if (lon<0.) lon+= 360.;
+  if (lon<0.) lon+= 360.;
 
-   result[0] = ra;
-   result[1] = dec;
-   result[2] = a/ARCSEC;
-   result[3] = b/ARCSEC;
-   result[4] = PA;
-   result[5] = distance;
-   result[6] = lon;
-   result[7] = lat;
+  result[0] = ra;
+  result[1] = dec;
+  result[2] = a/ARCSEC;
+  result[3] = b/ARCSEC;
+  result[4] = PA;
+  result[5] = distance;
+  result[6] = lon;
+  result[7] = lat;
 
+cleanup:
+  free_dmatrix(sigxy,1,2,1,2);
+  free_dmatrix(derivs,1,2,1,2);
+  free_dmatrix(covar,1,6,1,6);
+  free_dmatrix(covecl,1,2,1,2);
+  free_dmatrix(coveq,1,2,1,2);
   return result;
-
 }
 
 
 double *abg_to_aei(char *abg_file)
 {
+  static double result[15];
   PBASIS p;
   XVBASIS xv;
   ORBIT orbit;
-  static double result[15];
   double d, dd;
   double  **covar_abg, **covar_xyz, **derivs, **covar_aei;
 
+  fill_nan(result, 15);
   covar_abg = dmatrix(1,6,1,6);
   covar_xyz = dmatrix(1,6,1,6);
   covar_aei = dmatrix(1,6,1,6);
   derivs = dmatrix(1,6,1,6);
 
   if (read_abg(abg_file,&p,covar_abg)) {
-    fprintf(stderr, "Error in input alpha/beta/gamma file\n");
-    exit(1);
+    fprintf(stderr, "Error in input alpha/beta/gamma file %s\n", abg_file);
+    goto cleanup;
   }
 
   /* Transform the orbit basis and get the deriv. matrix */
@@ -260,22 +241,6 @@ double *abg_to_aei(char *abg_file)
   d = sqrt(xBary*xBary + yBary*yBary + pow(zBary-1/p.g,2.));
   dd = d*d*sqrt(covar_abg[5][5]);
 
-  /* Print out the results, with comments */
-  /*
-  printf(aei_file,"# Barycentric osculating elements in ICRS at epoch %.1f:\n",jd0);
-  printf("#    a            e       i      Node   Arg of Peri   Time of Peri\n");
-  printf("%12.6f  %9.6f  %8.3f %8.3f  %8.3f %11.3f\n",
-  	 orbit.a, orbit.e, orbit.i, orbit.lan, orbit.aop, orbit.T);
-  fprintf("+-%10.6f  %9.6f  %8.3f %8.3f  %8.3f %11.3f\n",
-     sqrt(covar_aei[1][1]),
-  	 sqrt(covar_aei[2][2]),
-  	 sqrt(covar_aei[3][3])/DTOR,
-     sqrt(covar_aei[4][4])/DTOR,
-	 sqrt(covar_aei[5][5])/DTOR,
-	 sqrt(covar_aei[6][6])/DAY);
-  fprintf("# covariance matrix:\n");
-  fprint_matrix(stdout,covar_aei,6,6);
-  */
   result[0] = orbit.a;
   result[1] = orbit.e;
   result[2] = orbit.i;
@@ -292,10 +257,10 @@ double *abg_to_aei(char *abg_file)
   result[13] = d;
   result[14] = dd;
 
+cleanup:
   free_dmatrix(covar_abg,1,6,1,6);
   free_dmatrix(covar_xyz,1,6,1,6);
   free_dmatrix(covar_aei,1,6,1,6);
   free_dmatrix(derivs,1,6,1,6);
   return result;
 }
-

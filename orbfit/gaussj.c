@@ -15,6 +15,7 @@ void gaussj(double **a, int n, double **b, int m)
 	for (j=1;j<=n;j++) ipiv[j]=0;
 	for (i=1;i<=n;i++) {
 		big=0.0;
+		irow=icol=0;
 		for (j=1;j<=n;j++)
 			if (ipiv[j] != 1)
 				for (k=1;k<=n;k++) {
@@ -26,6 +27,7 @@ void gaussj(double **a, int n, double **b, int m)
 						}
 					} else if (ipiv[k] > 1) nrerror("gaussj: Singular Matrix-1");
 				}
+		if (icol == 0) nrerror("gaussj: matrix is not finite");
 		++(ipiv[icol]);
 		if (irow != icol) {
 			for (l=1;l<=n;l++) SWAP(a[irow][l],a[icol][l])

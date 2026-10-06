@@ -183,7 +183,7 @@ ec_to_proj(double lat_ec,
   if (partials!=NULL) {
     partials[1][2] = clat;
     partials[1][1] = partials[2][2] = 0.;
-    partials[1][2] = 1.;
+    partials[2][1] = 1.;
   }
 
   return;
@@ -296,6 +296,18 @@ xyz_proj_to_ec( double x_p, double y_p, double z_p,
 }
 
  
+/* Below this fraction an orbit is taken as circular or in the ecliptic */
+#define ELEMENTS_TINY 1e-12
+
+/* Keep acos() arguments that rounding has pushed past +-1 in range */
+static double
+clamp_unit(double x)
+{
+  if (x > 1.) return 1.;
+  if (x < -1.) return -1.;
+  return x;
+}
+
 void
 orbitElements(XVBASIS *xv,
 	      ORBIT  *orb)
@@ -366,38 +378,54 @@ orbitElements(XVBASIS *xv,
   hMagnitude = sqrt( angularMomentum[1]*angularMomentum[1] + 		    
 		     angularMomentum[2]*angularMomentum[2] +	
 		     angularMomentum[3]*angularMomentum[3] );
-  inclination = acos(angularMomentum[3]/hMagnitude); /* in radians here */
+  inclination = acos(clamp_unit(angularMomentum[3]/hMagnitude)); /* in radians here */
   ascendingNodeMagnitude = sqrt(ascendingNode[1]*ascendingNode[1] +
 				ascendingNode[2]*ascendingNode[2] +
 				ascendingNode[3]*ascendingNode[3]);
-  longitudeOfAscendingNode = acos(ascendingNode[1]/ascendingNodeMagnitude);
+  if (ascendingNodeMagnitude <= ELEMENTS_TINY*hMagnitude) {
+    /* Orbit in the ecliptic: the node is undefined, so measure from +x */
+    ascendingNode[1] = 1.;
+    ascendingNode[2] = ascendingNode[3] = 0.;
+    ascendingNodeMagnitude = 1.;
+  }
+  longitudeOfAscendingNode = acos(clamp_unit(ascendingNode[1]/ascendingNodeMagnitude));
   /* Capital Omega in radians here */
   if (ascendingNode[2] < 0) longitudeOfAscendingNode = 
 			      2*PI - longitudeOfAscendingNode;
-  /* ???could use atan2 here?? */
   ascEccDotProduct = ascendingNode[1]*eccentricityVector[1] +
     ascendingNode[2]*eccentricityVector[2] +
     ascendingNode[3]*eccentricityVector[3];
-  argumentOfPerifocus = acos(ascEccDotProduct/
-			     (ascendingNodeMagnitude*eccentricity)); 
-  /* Small omega in radians here */
-  if (eccentricityVector[3] < 0) argumentOfPerifocus = 
-				   2*PI - argumentOfPerifocus;
-  xBar = (semiLatusRectum - rMagnitude)/eccentricity;
-  yBar = radVelDotProduct*sqrt(semiLatusRectum/combinedMass)/eccentricity;
+  if (eccentricity <= ELEMENTS_TINY) {
+    /* Circular orbit: perihelion is undefined, put it at the node */
+    argumentOfPerifocus = 0.;
+  } else {
+    argumentOfPerifocus = acos(clamp_unit(ascEccDotProduct/
+					  (ascendingNodeMagnitude*eccentricity)));
+    /* Small omega in radians here */
+    if (eccentricityVector[3] < 0) argumentOfPerifocus = 
+				     2*PI - argumentOfPerifocus;
+  }
 
-  /* From here, we assume that the motion is elliptical */
+  if (eccentricity >= 1. || semimajor <= 0.) {
+    /* Unbound: no time of perihelion from the elliptical relations */
+    timeOfPerifocalPassage = NAN;
+  } else if (eccentricity <= ELEMENTS_TINY) {
+    timeOfPerifocalPassage = epochTime;
+  } else {
+    xBar = (semiLatusRectum - rMagnitude)/eccentricity;
+    yBar = radVelDotProduct*sqrt(semiLatusRectum/combinedMass)/eccentricity;
 
-  cosE = (xBar/semimajor) + eccentricity;
-  sinE = yBar/(semimajor*sqrt(1-eccentricity*eccentricity));
-  /* where semimajor*sqrt(1-eccentricity*eccentricity) is semiminor */
-  eccentricAnomaly = atan2(sinE,cosE);
+    cosE = (xBar/semimajor) + eccentricity;
+    sinE = yBar/(semimajor*sqrt(1-eccentricity*eccentricity));
+    /* where semimajor*sqrt(1-eccentricity*eccentricity) is semiminor */
+    eccentricAnomaly = atan2(sinE,cosE);
 
-  meanAnomaly = eccentricAnomaly - eccentricity*sinE; /* radians */
-  meanMotion = sqrt(combinedMass/(pow(semimajor,3.)));
-  timeOfPerifocalPassage = epochTime - meanAnomaly/meanMotion/DAY;
-  /* This comes from M=n(t-T) where t is epoch time and T is time of perifocal
-     passage, in days */
+    meanAnomaly = eccentricAnomaly - eccentricity*sinE; /* radians */
+    meanMotion = sqrt(combinedMass/(pow(semimajor,3.)));
+    timeOfPerifocalPassage = epochTime - meanAnomaly/meanMotion/DAY;
+    /* This comes from M=n(t-T) where t is epoch time and T is time of perifocal
+       passage, in days */
+  }
 				
   orb->a=semimajor;
   orb->e=eccentricity; 

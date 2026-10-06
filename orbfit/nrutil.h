@@ -10,7 +10,7 @@ void free_dmatrix(double **, int, int, int, int);
 void nrerror(const char *);
 
 void lubksb(double **, int, int *, double[]);
-void ludcmp(double **a, int n, int *indx, double *d);
+int ludcmp(double **a, int n, int *indx, double *d);
 void gaussj(double **a, int n, double **b, int m);
 void covsrt(double **covar, int ma, int ia[], int mfit);
 float ran1(long *idum);
