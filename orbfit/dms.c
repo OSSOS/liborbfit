@@ -11,13 +11,13 @@
 double 
 dmsdeg(const char *string)
 {
-	float args[3];
-	char substring[10];
+	double args[3];
+	char substring[32];
 	int i,iarg,j,sgn;
 	for (iarg=0;iarg<3;args[iarg++]=0.);
 
 	/*strip off leading whitespace and look for - sign*/
-	for (i=0; isspace( (int) string[i]); i++);
+	for (i=0; isspace( (unsigned char) string[i]); i++);
 	if (string[i]=='-') {
 		sgn = -1;
 		i++;
@@ -28,11 +28,11 @@ dmsdeg(const char *string)
 
 	for (iarg=0; iarg<3; iarg++) {
 	  substring[0] = 0;
-	  j = sscanf(string+i, "%[ :]",substring);
+	  j = sscanf(string+i, "%31[ :]",substring);
 	  if (j==EOF || *(string+i)==0) break;  /*failing to get EOF at end*/
 	  i += strlen(substring);
 	  substring[0] = 0;
-	  j = sscanf(string+i,"%[-+.0-9]",substring);
+	  j = sscanf(string+i,"%31[-+.0-9]",substring);
 	  if (j==EOF || *(string+i)==0) break;
 	  else if (j!=1) {
 	    fprintf(stderr,"Error interpeting dms ->%s<-\n",string);
@@ -52,60 +52,5 @@ double
 hmsdeg(const char *string)
 {
 	return(15. * dmsdeg(string));
-}
-
-void
-degdms(double degr,
-       char *outbuff)
-{
-  int  ideg,imin,sign=1;
-  double sec;
-
-  if (degr<0.) {
-    sign=-1;
-    degr *= -1.;
-  }
-
-  ideg = floor(degr);
-  degr = (degr-ideg)*60.;
-  imin = floor(degr);
-  sec = (degr-imin)*60.;
-
-  if (sign>0) 
-    if (ideg<100)
-      sprintf(outbuff," +%02d:%02d:%06.3f",ideg,imin,sec);
-    else
-      sprintf(outbuff,"+%03d:%02d:%06.3f",ideg,imin,sec);
-  else
-    if (ideg<100)
-      sprintf(outbuff," -%02d:%02d:%06.3f",ideg,imin,sec);
-    else
-      sprintf(outbuff,"-%03d:%02d:%06.3f",ideg,imin,sec);
-  return;
-}
-void
-deghms(double degr,
-       char *outbuff)
-{
-  int  ideg,imin,sign=1;
-  double sec;
-
-  if (degr<0) {
-    sign=-1;
-    degr *= -1.;
-  }
-
-  degr /= 15.;
-  ideg = floor(degr);
-  degr = (degr-ideg)*60.;
-  imin = floor(degr);
-  sec = (degr-imin)*60.;
-
-  if (sign>0) 
-    sprintf(outbuff," %02d:%02d:%07.4f",ideg,imin,sec);
-  else
-    sprintf(outbuff,"-%02d:%02d:%07.4f",ideg,imin,sec);
-
-  return;
 }
 

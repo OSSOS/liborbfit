@@ -45,6 +45,7 @@
 #define ARCSEC	(PI/180./3600.)
 #define DAY	(1./365.25)	/*Julian day, 86400 s*/
 #define SPEED_OF_LIGHT  63241.06515	/*in AU/YR*/
+#define AU_KM   149597870.7	/*IAU 2012 astronomical unit in km*/
 #define ECL	(23.43928*PI/180.)	/*Obliquity of ecliptic at J2000*/
 
 #define TSTEP	(20.*DAY)	/*Time step for orbit integrator*/
@@ -78,10 +79,10 @@ struct date_time
    {
 	int y;
 	int mo;
-	float d;
-	float h;
-	float mn;
-	float s;
+	double d;
+	double h;
+	double mn;
+	double s;
    };
 
 /* Data of an individual observation */
@@ -376,5 +377,9 @@ int invert_matrix(double **in, double **out, int dim);
 
 /* Geocentric ICRS x/y/z (km) to SSBary x/y/z (AU) at UTC JD jd */
 void geo_to_ssbary(double jd, double *x, double *y, double *z);
+
+/* Copy 0-indexed columns [start, end) of line into out (size end-start+1),
+ * stopping at the end of the line. */
+void copy_columns(const char *line, int start, int end, char *out);
 
 #endif

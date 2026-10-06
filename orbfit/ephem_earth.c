@@ -876,9 +876,8 @@ observatory_geocenter(double jd,
 }
 
 
-/* Copy columns [start, end) of a line, or fewer if the line is short */
-static void
-column(const char *line, int start, int end, char *out)
+void
+copy_columns(const char *line, int start, int end, char *out)
 {
   int n = strcspn(line, "\r\n");
   if (n<start) {
@@ -886,7 +885,7 @@ column(const char *line, int start, int end, char *out)
     return;
   }
   if (end>n) end=n;
-  strncpy(out, line+start, end-start);
+  memcpy(out, line+start, end-start);
   out[end-start]=0;
 }
 
@@ -936,7 +935,7 @@ read_observatories(char *fname)
     int nlon, ncos, nsin;
     char *eol;
 
-    column(inbuff, 0, 3, code);
+    copy_columns(inbuff, 0, 3, code);
     if ((obscode = obscode_from_string(code))==OBSCODE_INVALID) continue;
     if (strchr(inbuff, ':')!=NULL && strchr(inbuff, ':') < inbuff+30) {
       fprintf(stderr,"Observatories file %s is not in the MPC ObsCodes format:\n->%s\n",
@@ -955,9 +954,9 @@ read_observatories(char *fname)
     sss->code = obscode;
     sss->warned = 0;
 
-    column(inbuff, 4, 13, lonstring);
-    column(inbuff, 13, 21, cosstring);
-    column(inbuff, 21, 30, sinstring);
+    copy_columns(inbuff, 4, 13, lonstring);
+    copy_columns(inbuff, 13, 21, cosstring);
+    copy_columns(inbuff, 21, 30, sinstring);
     nlon = sscanf(lonstring, "%lf", &lon);
     ncos = sscanf(cosstring, "%lf", &(sss->rhocos));
     nsin = sscanf(sinstring, "%lf", &(sss->rhosin));
@@ -973,7 +972,7 @@ read_observatories(char *fname)
       exit(1);
     }
 
-    column(inbuff, 30, 30+79, sss->name);
+    copy_columns(inbuff, 30, 30+79, sss->name);
     for (eol=sss->name+strlen(sss->name); eol>sss->name && isspace((unsigned char) eol[-1]); eol--) ;
     *eol = 0;
     nsites++;

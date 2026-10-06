@@ -199,41 +199,79 @@ fgets_nocomment(char *inbuff, int length,
  * part of OBSERVATION structure, ra & dec in the x & y parts.  Format
  * error returns non-zero.
  */
+/* Read a signed coordinate from the second line of an MPC satellite
+ * observation: sign in column sign_col, value in the next 11 columns. */
+static int
+mpc_signed_value(const char *line, int sign_col, double *value)
+{
+  char field[16];
+  copy_columns(line, sign_col+1, sign_col+12, field);
+  if (sscanf(field, "%lf", value) != 1) return 1;
+  if (line[sign_col] == '-') *value = -*value;
+  else if (line[sign_col] != '+' && line[sign_col] != ' ') return 1;
+  return 0;
+}
+
 int scan_observation(char *inbuff, OBSERVATION *obs, OBSERVATION *previous)
 {
   char rastring[80],decstring[80],*endptr;
-  char two_line_flag[80]; // if set then this is the 2nd line of a two line MPC entry
   char codestring[16];
   double jd;
   /* get date to see which format this is */
   /* For an MPC format the first field will have non-numeric characters*/
   jd = strtod(inbuff, &endptr);
-  if (jd==0. || *endptr==0 || !isspace(*endptr)) {
-    /* See if this is perhaps in MPC format */
+  if (jd==0. || *endptr==0 || !isspace((unsigned char) *endptr)) {
+    /* 80-column MPC format */
     struct date_time dd;
-    if (sscanf(inbuff+15,"%d %d %f",&(dd.y),&(dd.mo),&(dd.d))!=3) {
+    char field[32];
+
+    if (strcspn(inbuff, "\r\n") > 32 && inbuff[14] == 's') {
+      /* Second line of a satellite observation: geocentric position of
+       * the observer for the previous line, in km (column 33 = 1) or
+       * AU (column 33 = 2). */
+      double x, y, z, scale;
+      if (previous == NULL) {
+        fprintf(stderr,"Satellite position line without an observation:\n ->%s\n",inbuff);
+        return(1);
+      }
+      if (inbuff[32] == '1') scale = 1.;
+      else if (inbuff[32] == '2') scale = AU_KM;
+      else {
+        fprintf(stderr,"Unknown units in satellite position line:\n ->%s\n",inbuff);
+        return(1);
+      }
+      if (mpc_signed_value(inbuff, 34, &x) || mpc_signed_value(inbuff, 46, &y)
+          || mpc_signed_value(inbuff, 58, &z)) {
+        fprintf(stderr,"Format error in satellite position line:\n ->%s\n",inbuff);
+        return(1);
+      }
+      previous->xe = x*scale;
+      previous->ye = y*scale;
+      previous->ze = z*scale;
+      return(-1);
+    }
+
+    copy_columns(inbuff, 15, 32, field);
+    if (sscanf(field,"%d %d %lf",&(dd.y),&(dd.mo),&(dd.d))!=3) {
       fprintf(stderr,"Format error in observation file:\n ->%s\n",inbuff);
       return(1);
     }
     dd.h = dd.mn = dd.s = 0.;
-    jd = date_to_jd(dd);
-    sscanf(inbuff+32,"%s", two_line_flag);
-
-    if (strncmp(two_line_flag, "1\0", 2)==0) {
-      // this is the 2nd line which will contain the x/y/z location of the observations
-      sscanf(inbuff+32,"%s - %lf - %lf - %lf", two_line_flag, &(previous->xe), &(previous->ye), &(previous->ze));
-      return(-1);
+    if ((jd = date_to_jd(dd)) == 0.) return(1);
+    copy_columns(inbuff, 32, 44, rastring);
+    copy_columns(inbuff, 44, 56, decstring);
+    copy_columns(inbuff, 77, 80, field);
+    if (sscanf(field,"%15s",codestring) != 1) {
+      fprintf(stderr,"Missing observatory code:\n ->%s\n",inbuff);
+      return(1);
     }
-    strncpy(rastring,inbuff+32,11);
-    strncpy(decstring,inbuff+44,11);
-    sscanf(inbuff+77,"%3s",codestring);
     obs->obscode = obscode_from_string(codestring);
     obs->dthetay = mpc_dtheta;
     
   } else if (jd<10000.) {
       /* See if perhaps this was y/m/d instead of JD: */
       struct date_time dd;
-      if (sscanf(inbuff, "%d %d %f %s %s %lf %15s",
+      if (sscanf(inbuff, "%d %d %lf %79s %79s %lf %15s",
                  &(dd.y), &(dd.mo), &(dd.d), rastring, decstring,
                  &(obs->dthetay),
                  codestring) != 7) {
@@ -242,11 +280,11 @@ int scan_observation(char *inbuff, OBSERVATION *obs, OBSERVATION *previous)
       }
       obs->obscode = obscode_from_string(codestring);
       dd.h = dd.mn = dd.s = 0.;
-      jd = date_to_jd(dd);
+      if ((jd = date_to_jd(dd)) == 0.) return(1);
   } else {
-      if (sscanf(inbuff, "%lf %s %s %lf %lf %lf %lf",
+      if (sscanf(inbuff, "%lf %79s %79s %lf %lf %lf %lf",
                  &jd, rastring, decstring, &(obs->dthetay), &(obs->xe), &(obs->ye), &(obs->ze)) != 7) {
-          if (sscanf(inbuff, "%lf %s %s %lf %15s",
+          if (sscanf(inbuff, "%lf %79s %79s %lf %15s",
                      &jd, rastring, decstring,
                      &(obs->dthetay),
                      codestring) != 5) {
@@ -288,7 +326,7 @@ int
 read_radec(OBSERVATION obsarray[], char *fname, int *nobs)
 {
   FILE *fptr;
-  OBSERVATION  *obs;
+  OBSERVATION  *obs = NULL;
   int  scan_status_flag;
   char	inbuff[256];
   double elat,elon;
@@ -606,7 +644,7 @@ print_matrix(FILE *fptr, double **matrix, int xdim, int ydim)
   int   i,j;
   for (i=1; i<=ydim; i++) {
     for (j=1; j<=xdim; j++) {
-      fprintf(fptr,"%11.4e ",matrix[i][j]);
+      fprintf(fptr,"%24.16e ",matrix[i][j]);
     }
     fprintf(fptr,"\n");
   }

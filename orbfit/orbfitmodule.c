@@ -44,7 +44,7 @@ double *fitradec(char *mpc_filename, char *abg_filename)
 
   /* fprintf(stderr, "# Chi-squared of fit: %.2f DOF: %d\n",chisq,dof); */
   fprintf(abg_file, "# Exact a, adot, b, bdot, g, gdot:\n");
-  fprintf(abg_file, "%11.8f %11.8f %11.8f %11.8f %11.8f %11.8f\n",p.a,p.adot,p.b,
+  fprintf(abg_file, "%.17g %.17g %.17g %.17g %.17g %.17g\n",p.a,p.adot,p.b,
   	p.bdot, p.g, p.gdot);
   pbasis_to_bary(&p, &xv, NULL);
 
@@ -65,7 +65,7 @@ double *fitradec(char *mpc_filename, char *abg_filename)
 
   /* Print out information on the coordinate system */
   fprintf(abg_file, "#     lat0       lon0       xBary     yBary      zBary   JD0\n");
-  fprintf(abg_file, "%12.7f %12.7f %10.7f %10.7f %10.7f  %.6f\n",
+  fprintf(abg_file, "%.17g %.17g %.17g %.17g %.17g %.17g\n",
 	 lat0/DTOR,lon0/DTOR,xBary,yBary,zBary,jd0);
 
   fclose(abg_file);

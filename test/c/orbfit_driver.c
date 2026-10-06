@@ -4,23 +4,26 @@
  *   orbfit_driver <observations> <abg output> [repeat]
  *
  * ORBIT_EPHEMERIS and ORBIT_OBSERVATORIES must point at the data files.
- * Exits non-zero if any returned value is not finite. */
+ * Exits non-zero if a returned position or element is not finite.
+ * Uncertainties may be NaN when the arc leaves the orbit undetermined. */
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "orbfit_api.h"
 
+/* required[] lists the indices of v that must be finite, ending with -1 */
 static int
-check(const char *what, const double *v, int n, int show)
+check(const char *what, const double *v, int n, const int *required, int show)
 {
   int i, bad = 0;
-  if (show) printf("%-14s", what);
-  for (i = 0; i < n; i++) {
-    if (!isfinite(v[i])) bad = 1;
-    if (show) printf(" %.10g", v[i]);
+  if (show) {
+    printf("%-14s", what);
+    for (i = 0; i < n; i++) printf(" %.10g", v[i]);
+    printf("\n");
   }
-  if (show) printf("\n");
+  for (i = 0; required[i] >= 0; i++)
+    if (!isfinite(v[required[i]])) bad = 1;
   if (bad) fprintf(stderr, "non-finite value returned by %s\n", what);
   return bad;
 }
@@ -28,6 +31,10 @@ check(const char *what, const double *v, int n, int show)
 int
 main(int argc, char *argv[])
 {
+  static const int fit_req[] = {0, -1};
+  static const int aei_req[] = {0, 1, 2, 3, 4, 5, 12, 13, -1};
+  static const int predict_req[] = {0, 1, 5, 6, 7, -1};
+  static const int helio_req[] = {0, 1, 2, -1};
   double *r, jd;
   int i, repeat, bad = 0;
 
@@ -39,14 +46,14 @@ main(int argc, char *argv[])
 
   for (i = 0; i < repeat; i++) {
     r = fitradec(argv[1], argv[2]);
-    bad |= check("fitradec", r, 2, i == 0);
+    bad |= check("fitradec", r, 2, fit_req, i == 0);
     r = abg_to_aei(argv[2]);
-    bad |= check("abg_to_aei", r, 15, i == 0);
+    bad |= check("abg_to_aei", r, 15, aei_req, i == 0);
     jd = r[12];
     r = predict(argv[2], jd + 365.25, 568);
-    bad |= check("predict", r, 8, i == 0);
+    bad |= check("predict", r, 8, predict_req, i == 0);
     r = predict_helio(argv[2], jd + 365.25, 568);
-    bad |= check("predict_helio", r, 3, i == 0);
+    bad |= check("predict_helio", r, 3, helio_req, i == 0);
   }
   return bad;
 }
