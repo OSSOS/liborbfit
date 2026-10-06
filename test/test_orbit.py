@@ -22,7 +22,9 @@ class HSTFormat(unittest.TestCase):
     def test_fitradec(self):
         orbit = mp_ephem.BKOrbit(None, self.mpc_filename)
         orbit.predict(orbit.observations[0].date)
-        self.assertAlmostEqual(orbit.a.to('au').value, 17.08, 0)
+        self.assertAlmostEqual(orbit.a.to('au').value, 91.82, 0)
+        # JPL SBDB gives i=3.32 deg for 2020 KQ11
+        self.assertAlmostEqual(orbit.inc.to('degree').value, 3.3, delta=0.5)
 
 class SimonFormat(unittest.TestCase):
 
@@ -36,7 +38,7 @@ class SimonFormat(unittest.TestCase):
     def test_fitradec(self):
         orbit = mp_ephem.BKOrbit(None, self.mpc_filename)
         orbit.predict(orbit.observations[0].date)
-        self.assertAlmostEqual(orbit.a.to('au').value, 43.8015219, 3)
+        self.assertAlmostEqual(orbit.a.to('au').value, 43.68817, 3)
 
 
 class OrbitFit(unittest.TestCase):
@@ -148,6 +150,21 @@ class OrbitFit(unittest.TestCase):
         for obs in observations:
             obs.observatory_code = 'T14'
         self.assertEqual(observations[0].observatory_code, 'T14')
+        orbit = mp_ephem.BKOrbit(observations)
+        self.assertAlmostEqual(orbit.a.to(units.AU).value, self.orbit.a.to(units.AU).value, 3)
+        self.assertAlmostEqual(orbit.e.value, self.orbit.e.value, 4)
+
+    def test_geocentric_location_matches_obscode(self):
+        """
+        Supplying the geocentric position (km) of Mauna Kea must give the same orbit as obscode 568.
+        """
+        mko = coordinates.EarthLocation.from_geodetic(-(155 + 28/60. + 19.9/3600.) * units.degree,
+                                                      (19 + 49/60. + 33.9/3600.) * units.degree,
+                                                      4207.24 * units.m)
+        observations = [obs for obs in self.observations if not obs.null_observation]
+        for obs in observations:
+            position, _ = mko.get_gcrs_posvel(obs.date)
+            obs.location = ObserverLocation(*position.xyz.to(units.km).value)
         orbit = mp_ephem.BKOrbit(observations)
         self.assertAlmostEqual(orbit.a.to(units.AU).value, self.orbit.a.to(units.AU).value, 3)
         self.assertAlmostEqual(orbit.e.value, self.orbit.e.value, 4)
