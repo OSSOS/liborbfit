@@ -1,4 +1,5 @@
 #include "orbfit.h"
+#include "orbfit_api.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>

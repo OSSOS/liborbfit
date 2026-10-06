@@ -46,3 +46,49 @@ jobs:
     - name: Test with pytest
       run: |
         pytest
+
+  c-checks:
+    # Strict C23 compile, then the C library under AddressSanitizer,
+    # LeakSanitizer and UBSan, both standalone and as loaded by Python.
+    runs-on: ubuntu-latest
+    env:
+      ORBIT_EPHEMERIS: ${{ github.workspace }}/src/mp_ephem/data/binEphem.405_64
+      ORBIT_OBSERVATORIES: ${{ github.workspace }}/src/mp_ephem/data/observatories.dat
+      SANITIZE: -fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+    - name: Compile with strict warnings as C23
+      run: |
+        gcc --version
+        for f in orbfit/*.c test/c/*.c; do
+          gcc -std=gnu2x -Wall -Wextra -Wno-unused-parameter -Werror -Iorbfit -fsyntax-only "$f"
+        done
+    - name: Run the C library standalone under sanitizers
+      env:
+        ASAN_OPTIONS: detect_leaks=1
+        UBSAN_OPTIONS: print_stacktrace=1
+      run: |
+        gcc -std=gnu2x -g -O1 $SANITIZE -Iorbfit orbfit/*.c test/c/orbfit_driver.c -lm -o orbfit_driver
+        ./orbfit_driver test/data/o3o08.mpc "$RUNNER_TEMP/o3o08.abg" 3
+        ./orbfit_driver test/data/hst.mpc "$RUNNER_TEMP/hst.abg" 2
+    - name: Build the extension with sanitizers
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        CFLAGS="-g -O1 $SANITIZE" LDFLAGS="$SANITIZE" pip install --no-cache-dir .
+    - name: Test with pytest under sanitizers
+      env:
+        # Python itself is not built with LeakSanitizer, so only check for memory errors here.
+        ASAN_OPTIONS: detect_leaks=0
+        UBSAN_OPTIONS: print_stacktrace=1
+      run: |
+        export LD_PRELOAD="$(gcc -print-file-name=libasan.so):$(gcc -print-file-name=libubsan.so)"
+        pytest test
