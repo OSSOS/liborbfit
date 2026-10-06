@@ -21,7 +21,7 @@ double	lat0, lon0;	/* ecliptic lat & lon of tangent point */
 double	xBary, yBary, zBary;	/*Posn of barycenter in our system*/
 double	jd0;		/* Zeropoint of time scale */
 
-double mpc_dtheta=DEFAULT_DTHETA;	/*default astrometric error*/
+static double mpc_dtheta=DEFAULT_DTHETA;	/*default astrometric error*/
 
 void
 set_mpc_dtheta(double d) {
@@ -410,19 +410,6 @@ read_radec(OBSERVATION obsarray[], char *fname, int *nobs)
   }
   if (fname!=NULL) fclose(fptr);
   return(0);
-}
-
-/* Write an observation (in arcseconds) to already-opened file
- * descriptor.
- */
-void
-write_obs(FILE *fptr,
-	  OBSERVATION *obs)
-{
-  fprintf(fptr,"%10.7f %9.2f %5.2f %9.2f %5.2f %3d\n",
-	  obs->obstime, obs->thetax/ARCSEC, obs->dthetax/ARCSEC,
-	  obs->thetay/ARCSEC, obs->dthetay/ARCSEC, obs->obscode);
-  return;
 }
 
 /* Read an orbit in alpha, beta, gamma format & covar matrix from file.
@@ -857,30 +844,11 @@ covar_map(double **covar_in,
 }
  
 /* calculate acceleration given barycentric coords x */
-/* This version just does the barycentric approximation. */
-void
-accel(double *xx,
-      double *a,
-      double t)
-{
-  double x,y,z,acc,r2;
-  x = xx[0] - xBary;
-  y = xx[1] - yBary;
-  z = xx[2] - zBary;
-  r2 = x*x+y*y+z*z;
-  acc = -GM*SSMASS*pow( r2 , -1.5);
-  a[0] = x*acc;
-  a[1] = y*acc;
-  a[2] = z*acc;
-  return;
-}
-
-/* calculate acceleration given barycentric coords x */
 /* Here is a more sophisticated version that includes perturbations*/
 /**** ??? Note that we could cache the planet positions if this turns
 *** out to be slower than desired.
 ***/
-void
+static void
 accel_nbody(double *xx,
 	    double *a,
 	    double t)
@@ -987,7 +955,6 @@ kbo3d(PBASIS *pin,
     
     /* jump velocity to middle of time step */
     accel_nbody(x,a,tx);
-    /*accel(x,a,tx);*/
     dtv = 0.5*dt + (tx-tv);
     for (i=0; i<3; i++) v[i] += dtv*a[i];
     tv += dtv;
@@ -998,7 +965,6 @@ kbo3d(PBASIS *pin,
 
   /* Now take the last step from tx to t */
   accel_nbody(x,a,tx);
-  /*accel(x,a,tx);*/
   for (i=0; i<3; i++) {
     xout[i] = x[i] + v[i]*(t-tx) + a[i]*(t-tx)*(0.5*(t+tx)-tv);
     vout[i] = v[i] + a[i]*(t-tv);

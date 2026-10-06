@@ -30,14 +30,14 @@ typedef struct {
 } SITE;
 static SITE *sitelist=NULL;
 
-char  observatory_file[FNAMESIZE]="";
+static char  observatory_file[FNAMESIZE]="";
 void
 set_observatory_file(char *fname) {
   strncpy(observatory_file, fname, FNAMESIZE-1);
   observatory_file[FNAMESIZE-1]=0;
 }
 
-char  ephem_file[FNAMESIZE]="";
+static char  ephem_file[FNAMESIZE]="";
 void
 set_ephem_file(char *fname) {
   strncpy(ephem_file, fname, FNAMESIZE-1);
@@ -169,7 +169,7 @@ static void Read_Coefficients( double Time )
  ** for the file itself, as environment-specified file or as default in
  ** this directory
  **/
-int Initialize_Ephemeris(void)
+static int Initialize_Ephemeris(void)
 {
   int headerID;
   long file_bytes, record_bytes = (long) (ARRAY_SIZE*sizeof(double));
@@ -371,7 +371,7 @@ double utc_jd_to_tt(double jd_utc)
 /**                                                                          **/
 /**==========================================================================**/
 
-void Interpolate_Position( double Time , int Target , double Position[3] )
+static void Interpolate_Position( double Time , int Target , double Position[3] )
 {
   double    A[50] , Cp[50]  , sum[3] , T_break , T_seg , T_sub , Tc;
   int       i , j;
@@ -496,7 +496,7 @@ void Interpolate_Position( double Time , int Target , double Position[3] )
   return;
 }
 
-void Interpolate_State(double Time, 
+static void Interpolate_State(double Time, 
 		       int Target, 
 		       double Position[3], 
 		       double Velocity[3])
@@ -675,7 +675,7 @@ geocenter_ssbary(double jd,
 #define  FLATTEN           0.003352813   /* flattening of earth, 1/298.257 */
 #define  EQUAT_RAD         6378137.    /* equatorial radius of earth, meters */
 
-double 
+static double 
 lst(double jd,
     double longit)
 {
@@ -712,7 +712,7 @@ lst(double jd,
 	return(sid_g);
 }
 
-void 
+static void 
 topo(double lmst, double rhocos, double rhosin,
 	double *x_geo, double *y_geo, double *z_geo)
 /* computes the geocentric equatorial vector (AU) of a site from its

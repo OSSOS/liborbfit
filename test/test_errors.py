@@ -1,6 +1,7 @@
 """
 Failures inside liborbfit raise BKOrbitError instead of ending the process,
-and concurrent calls from threads give the same answers as serial ones.
+concurrent calls from threads give the same answers as serial ones, and the
+library exports only its public entry points.
 """
 import os
 import tempfile
@@ -10,8 +11,20 @@ import unittest
 from astropy.time import Time
 
 import mp_ephem
+from mp_ephem import bk_orbit
 
 __PATH__ = os.path.dirname(__file__)
+
+
+class LibraryExports(unittest.TestCase):
+
+    def test_only_api_exported(self):
+        lib = bk_orbit._load_orbfit()
+        for name in ('fitradec', 'predict', 'predict_helio', 'abg_to_aei', 'orbfit_last_error',
+                     'set_ephem_file', 'set_observatory_file', 'set_mpc_dtheta', 'utc_jd_to_tt'):
+            self.assertTrue(hasattr(lib, name), name)
+        for name in ('gaussj', 'dvector', 'nrerror', 'kbo3d', 'read_abg', 'orbfit_fail'):
+            self.assertFalse(hasattr(lib, name), name)
 
 
 class LibraryErrors(unittest.TestCase):

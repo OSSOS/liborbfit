@@ -24,7 +24,7 @@ mrqmin_orbit(OBSERVATION obsarray[], int ndata, double a[], int ia[],
 		  int ma, double **covar, double **alpha, double *chisq,
 		  double *alamda, double energy_wt);
 
-void
+static void
 mrqfit(OBSERVATION *obsarray,
        int nobs,
        PBASIS *p,
@@ -158,7 +158,7 @@ fit_observations(OBSERVATION obsarray[],
 
 
 /* Subroutine which executes the mrqmin optimization */
-void
+static void
 mrqfit(OBSERVATION *obsarray,
        int nobs,
        PBASIS *p,

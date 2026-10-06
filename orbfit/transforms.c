@@ -128,9 +128,9 @@ xyz_ec_to_eq(double x_ec, double y_ec, double z_ec,
 *** of projection as static variables to update as needed
 ****/
 
-double old_lat0=-999., old_lon0, clat0, slat0, clon0, slon0;
+static double old_lat0=-999., old_lon0, clat0, slat0, clon0, slon0;
 
-void
+static void
 check_latlon0(double lat0,
 	      double lon0) 
 {

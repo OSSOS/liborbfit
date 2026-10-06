@@ -3,6 +3,7 @@
 #ifndef ORBFIT_H
 #define ORBFIT_H
 #include "nrutil.h"
+#include "orbfit_api.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -132,10 +133,6 @@ void
 earth3d(double t,	/* time is in years here */
 	int obscode,
 	double *x, double *y, double *z);
-/* UTC Julian Date to TT Julian Date.  DE405 is evaluated at TT. */
-double
-utc_jd_to_tt(double jd_utc);
-
 /*ICRS vector from SSBary to observatory location.
  * jd is a UTC Julian Date. */
 void
@@ -229,15 +226,6 @@ int
 read_radec(OBSERVATION obsarray[], 
 	   char *fname, 
 	   int *nobs);
-/* reset astrometric error assigned to MPC obs.*/
-void
-set_mpc_dtheta(double d);
-
-/* set filename for ephemeris or observatory data */
-void
-set_ephem_file(char *fname);
-void
-set_observatory_file(char *fname);
 
 /* preliminary fit to observations */
 void
