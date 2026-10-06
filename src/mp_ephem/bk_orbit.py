@@ -12,7 +12,7 @@ from astropy.coordinates import SkyCoord
 from astropy.time import Time
 # from astropy.units.quantity import Quantity
 
-from .ephem import EphemerisReader, ObsRecord
+from .ephem import EphemerisReader, ObsRecord, obscode_to_int
 
 orig_bytes = bytes
 
@@ -154,7 +154,7 @@ class BKOrbit(object):
                                                    pad=True)
                 # UTC JD. The ephemeris converts this to TT; do not pass TT here.
                 if obs.location is None:
-                    _mpc_file.write("{} {} {} {} {}\n".format(obs.date.utc.jd, ra, dec, res, int(obs.observatory_code)))
+                    _mpc_file.write("{} {} {} {} {}\n".format(obs.date.utc.jd, ra, dec, res, obs.observatory_code))
                 else:
                     _mpc_file.write("{} {} {} {} {} {} {}\n".format(obs.date.utc.jd, ra, dec, res,
                                                                     obs.location.x,
@@ -329,7 +329,7 @@ class BKOrbit(object):
         Builds a summary of the residuals of a fit and loads those into the observation objects.
         """
         for observation in self.observations:
-            self.predict(observation.date, obs_code=int(observation.observatory_code))
+            self.predict(observation.date, obs_code=observation.observatory_code)
             coord1 = SkyCoord(self.ra, self.dec)
             coord2 = SkyCoord(observation.coordinate.ra, self.dec)
             # observation.ra_residual = float(coord1.separation(coord2).arcsec)
@@ -517,7 +517,7 @@ class BKOrbit(object):
         this methods sets the values of coordinate, dra (arc seconds), ddec (arc seconds), pa, (degrees) and date (str)
 
         @param date: the julian date of interest or an astropy.core.time.Time object.
-        @param obs_code: the Minor Planet Center observatory location code (Maunakea: 568 is the default)
+        @param obs_code: the Minor Planet Center observatory location code, e.g. 568 or 'T14' (Maunakea: 568 is the default)
         @param minimum_delta: minimum difference in time between recomputing a predicted location.
         @param abg_file: the 'abg' formatted file to use for the prediction.
         """
@@ -552,7 +552,7 @@ class BKOrbit(object):
         self.orbfit.predict_helio.argtypes = [ctypes.c_char_p, ctypes.c_double, ctypes.c_int]
         predict = self.orbfit.predict_helio(ctypes.c_char_p(bytes(abg_file.name, 'utf-8')),
                                             jd,
-                                            ctypes.c_int(obs_code))
+                                            ctypes.c_int(obscode_to_int(obs_code)))
         self.helio = numpy.array((predict.contents[0], predict.contents[1], predict.contents[2])) * units.au
 
     def predict(self, date, obs_code=568, abg_file=None, minimum_delta=None):
@@ -562,7 +562,7 @@ class BKOrbit(object):
         this methods sets the values of coordinate, dra (arc seconds), ddec (arc seconds), pa, (degrees) and date (str)
 
         @param date: the julian date of interest or an astropy.core.time.Time object.
-        @param obs_code: the Minor Planet Center observatory location code (Maunakea: 568 is the default)
+        @param obs_code: the Minor Planet Center observatory location code, e.g. 568 or 'T14' (Maunakea: 568 is the default)
         @param minimum_delta: minimum difference in time between recomputing a predicted location.
         @param abg_file: the 'abg' formatted file to use for the prediction.
         """
@@ -597,7 +597,7 @@ class BKOrbit(object):
         self.orbfit.predict.argtypes = [ctypes.c_char_p, ctypes.c_double, ctypes.c_int]
         predict = self.orbfit.predict(ctypes.c_char_p(bytes(abg_file.name, 'utf-8')),
                                       jd,
-                                      ctypes.c_int(obs_code))
+                                      ctypes.c_int(obscode_to_int(obs_code)))
         self._coordinate = None
         self._ra = predict.contents[0] * units.degree
         self._dec = predict.contents[1] * units.degree

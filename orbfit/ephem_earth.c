@@ -18,32 +18,21 @@ static char vcid[] = "$Id: ephem_earth.c,v 1.1 2006/11/22 20:31:50 observe Exp $
 ***/
 #include "orbfit.h"
 #include <string.h>
+#include <ctype.h>
 #define FNAMESIZE 256
 #define BUFFSIZE  512
 /* structures used to keep observatory information: */
 static int nsites=0;
 typedef struct {
   int code;
-  double	lon;		/*observatory longitude in hours*/
-  double	lat;		/*observatory latitude in degrees*/
-  double	altitude;	/*observatory altitude in meters */
+  int	space;		/*no fixed location: a space observatory*/
+  int	warned;		/*already warned that this site has no location*/
+  double	lon;		/*observatory west longitude in hours*/
+  double	rhocos;		/*rho cos(phi') in Earth equatorial radii*/
+  double	rhosin;		/*rho sin(phi') in Earth equatorial radii*/
   char	name[80];
 } SITE;
-static SITE sitelist[MAX_SITES];
-
-/* And likewise some information for orbiting observatories: */
-static int nspacecraft=0;
-typedef struct {
-  int code;
-  double	i;		/*inclination of orbit (degrees)*/
-  double	P;		/*sidereal orbital period, (days)*/
-  double	precess;	/*period for orbital precession (days)*/
-  double	jd0;		/*time of zero orbit phase*/
-  double	ra0;		/*RA of orbit pole at jd0 (degrees)*/
-  double	a;		/*semi-major axis of orbit (m)*/
-  char	name[80];
-} SPACECRAFT;
-static SPACECRAFT spacecraftlist[MAX_SITES];
+static SITE *sitelist=NULL;
 
 char  observatory_file[FNAMESIZE]="";
 void
@@ -753,38 +742,21 @@ lst(double jd,
 }
 
 void 
-topo(double geolong, double geolat, double height,
+topo(double lmst, double rhocos, double rhosin,
 	double *x_geo, double *y_geo, double *z_geo)
-/* computes the geocentric coordinates from the geodetic
-(standard map-type) longitude, latitude, and height.
-These are assumed to be in decimal hours, decimal degrees, and
-meters respectively.  Notation generally follows 1992 Astr Almanac,
-p. K11 */
-
-/**** I've changed this to assume long & lat in radians, and
-***** to return distances in AU.  
-***** And note that this gives proper equatorial vector only if lon
-***** is really LMST measured positive eastward.
-****/
+/* computes the geocentric equatorial vector (AU) of a site from its
+ * local mean sidereal time (radians, positive eastward) and its MPC
+ * parallax constants rho cos(phi') and rho sin(phi') (Earth radii).
+ */
 {
+	*x_geo = rhocos * cos(lmst);
+	*y_geo = rhocos * sin(lmst);
+	*z_geo = rhosin;
 
-	double denom, C_geo, S_geo;
-
-	denom = (1. - FLATTEN) * sin(geolat);
-	denom = cos(geolat) * cos(geolat) + denom*denom;
-	C_geo = 1. / sqrt(denom);
-	S_geo = (1. - FLATTEN) * (1. - FLATTEN) * C_geo;
-	C_geo = C_geo* EQUAT_RAD + height ;  /* deviation from almanac
-		       notation -- include height here. */
-	S_geo = S_geo* EQUAT_RAD + height ;
-	*x_geo = C_geo * cos(geolat) * cos(geolong);
-	*y_geo = C_geo * cos(geolat) * sin(geolong);
-	*z_geo = S_geo * sin(geolat);
-
-	/* convert to AU, keeping in mind that Horizons was km and this is m*/
-	*x_geo /= (1000.*R1.AU);
-	*y_geo /= (1000.*R1.AU);
-	*z_geo /= (1000.*R1.AU);
+	/* EQUAT_RAD is in m and R1.AU is in km */
+	*x_geo *= EQUAT_RAD / (1000.*R1.AU);
+	*y_geo *= EQUAT_RAD / (1000.*R1.AU);
+	*z_geo *= EQUAT_RAD / (1000.*R1.AU);
 }
 
 /* OK, now put all of the above together to give the observatory coordinates
@@ -844,6 +816,33 @@ void geo_to_ssbary(double jd, double *x, double *y, double *z)
 }
 
 
+int
+obscode_from_string(const char *code)
+{
+  int i, n, prefix;
+
+  n = strlen(code);
+  if (n<1) return OBSCODE_INVALID;
+  for (i=1; i<n; i++)
+    if (!isdigit((unsigned char) code[i])) return OBSCODE_INVALID;
+  if (isdigit((unsigned char) code[0])) return atoi(code);
+  if (n!=3) return OBSCODE_INVALID;
+  if (code[0]>='A' && code[0]<='Z') prefix = code[0]-'A'+10;
+  else if (code[0]>='a' && code[0]<='z') prefix = code[0]-'a'+36;
+  else return OBSCODE_INVALID;
+  return prefix*100 + atoi(code+1);
+}
+
+static SITE *
+find_site(int obscode)
+{
+  int i;
+  if (nsites<=0) read_observatories(NULL);
+  for (i=0; i<nsites; i++)
+    if (sitelist[i].code==obscode) return &(sitelist[i]);
+  return NULL;
+}
+
 /* return vector from geocenter->observatory in ICRS coordinates*/
 void
 observatory_geocenter(double jd,
@@ -852,122 +851,68 @@ observatory_geocenter(double jd,
 		      double *yobs,
 		      double *zobs) {
 
-  /* fprintf(stderr, "Reading site entries\n"); */
+  static int last_unknown=OBSCODE_INVALID;
+  SITE *site;
 
+  *xobs=*yobs=*zobs=0.;
+  if (obscode==OBSCODE_GEOCENTER) return;
 
-  if (nsites<=0 && nspacecraft<=0) read_observatories(NULL);
-
-  /* fprintf(stderr, "Read entries for %i sites\n", nsites); */
-  if (obscode < OBSCODE_ORBITAL) {
-    /* This is a ground-based observatory */
-    double	obslat, obslon, obsalt, obslmst;	/*observatory info*/
-    int i;
-
-    if (obscode==OBSCODE_GEOCENTER) {
-      *xobs=*yobs=*zobs=0.;
-      return;
-    }
-
-    /* get the lat, lon, & altitude of this observatory */
-    for (i=0; obscode!=sitelist[i].code && i<nsites; i++)  ;
-    if (i>=nsites) {
-      fprintf(stderr,"Unknown observatory code %d, using barycenter\n",obscode);
-      if (obscode==OBSCODE_GEOCENTER) {
-        *xobs=*yobs=*zobs=0.;
-        return;
-      }
-      /* exit(1); */
-    }
-    obslon = sitelist[i].lon;
-    obslat = sitelist[i].lat;
-    obsalt = sitelist[i].altitude;
-
-    /* Get the LMST and calculate to ICRS vector */
-    obslmst=lst(jd,obslon);
-    topo(obslmst*PI/12., obslat, obsalt, xobs, yobs, zobs);
-
-  } else {
-
-      /* Orbiting observatory */
-    double pole, rapole, phase;
-    int i;
-    SPACECRAFT *s;
-    if (obscode>2000) {
-        FILE *sitefile ;
-        char inbuff[BUFFSIZE];
-        char filename[FNAMESIZE];
-        double jd0;
-        if (obscode == 2001) {
-            strncpy(filename,"os393.hst",FNAMESIZE-1);
-        } else {
-            strncpy(filename,"pn70.hst",FNAMESIZE-1);
-        }
-        sitefile = fopen(filename,"r");
-        while (fgets_nocomment(inbuff, BUFFSIZE-1, sitefile, NULL)!=NULL) {
-            sscanf(inbuff, "%lf %lf %lf %lf", &jd0, xobs, yobs, zobs);
-            if (jd0 + 5./60./24.0> jd) {
-                *xobs /= R1.AU;
-                *yobs /= R1.AU;
-                *zobs /= R1.AU;
-                fclose(sitefile);
-                return;
-            }
-        }
-        fclose(sitefile);
-    }
-
-    for (i=0; obscode!=spacecraftlist[i].code && i<nspacecraft; i++)  ;
-    if (i>=nspacecraft) {
-      fprintf(stderr,"Unknown spacecraft code %d, using barycenter\n",obscode);
-      if (obscode==OBSCODE_GEOCENTER) {
-        *xobs=*yobs=*zobs=0.;
-        return;
-      }
-      /* exit(1); */
-    }
-    s = &(spacecraftlist[i]);
-    pole = s->i;
-    phase = -(jd - s->jd0) / s->precess;/* RA of pole DEcreases w/time 
-					 * for precess > 0 */
-    phase -= floor(phase);
-    rapole = s->ra0 + phase*TPI;
-
-    phase = (jd - s->jd0) / s->P;	/* orbit is increasing RA 
-					 * for P > 0 */
-    phase -= floor(phase);
-    phase *= TPI;
-
-    *xobs = s->a * (cos(phase)*cos(rapole) 
-		    - cos(pole)*sin(phase)*sin(rapole));
-    *yobs = s->a * (cos(phase)*sin(rapole) 
-		    + cos(pole)*sin(phase)*cos(rapole));
-    *zobs = s->a * sin(phase)*sin(pole);
-    /*fprintf(stderr,"Obs. Posn at jd %.5f : phase %.1f rapole %.1f pole %.1f \n",
-      jd, phase/DTOR, rapole/DTOR, pole/DTOR);*/
-    /* fprintf(stderr," x,y,z: %g %g %g\n", *xobs, *yobs, *zobs); */
+  site = find_site(obscode);
+  if (site==NULL) {
+    if (obscode!=last_unknown)
+      fprintf(stderr,"Unknown observatory code %d, using geocenter\n",obscode);
+    last_unknown = obscode;
+    return;
   }
+  if (site->space) {
+    /* Space observatory positions must come with the observation */
+    if (!site->warned)
+      fprintf(stderr,"Observatory code %d (%s) has no fixed location, using geocenter\n",
+	      obscode, site->name);
+    site->warned = 1;
+    return;
+  }
+
+  /* Get the LMST and calculate to ICRS vector */
+  topo(lst(jd,site->lon)*PI/12., site->rhocos, site->rhosin, xobs, yobs, zobs);
 
   return;
 }
 
 
-/* Read the look-up table for observatories.  
- * Note that ground-based longitudes are stored in hours, 
- * altitude in meters, lat in radians */
+/* Copy columns [start, end) of a line, or fewer if the line is short */
+static void
+column(const char *line, int start, int end, char *out)
+{
+  int n = strcspn(line, "\r\n");
+  if (n<start) {
+    out[0]=0;
+    return;
+  }
+  if (end>n) end=n;
+  strncpy(out, line+start, end-start);
+  out[end-start]=0;
+}
+
+/* Read the look-up table for observatories, in the fixed-column format of
+ * https://minorplanetcenter.net/iau/lists/ObsCodes.html :
+ *   cols 1-3 code, 5-13 east longitude (deg), 14-21 rho cos(phi'),
+ *   22-30 rho sin(phi'), 31- name.
+ * Space observatories leave the longitude and parallax constants blank.
+ * Lines that do not start with a code (headers, <pre>) are skipped.
+ * Ground-based longitudes are stored as west longitude in hours. */
 void
 read_observatories(char *fname)
 {
 
   FILE *sitefile;
-  char  inbuff[BUFFSIZE], latstring[40], lonstring[40];
-  int nchar;
-  int obscode;
+  char  inbuff[BUFFSIZE], code[4], lonstring[16], cosstring[16], sinstring[16];
+  int obscode, maxsites=0;
   char fileName[FNAMESIZE];
 
-  extern double dmsdeg(char *string);
-  extern double hmsdeg(char *string);
-
-  nsites = nspacecraft = 0;
+  nsites = 0;
+  free(sitelist);
+  sitelist = NULL;
 
   /** use passed filename, or a previously specified filename,
    ** or environment-specified file, or the default filename, in that order
@@ -990,69 +935,56 @@ read_observatories(char *fname)
   }
 
   while (fgets_nocomment(inbuff, BUFFSIZE-1, sitefile, NULL)!=NULL) {
-    /* fprintf(stderr,"%s\n", inbuff); */
-    if (sscanf(inbuff, "%i", &obscode)!=1) {
-      fprintf(stderr,"Bad line in obseratories file %s:\n->%s\n",
+    SITE *sss;
+    double lon;
+    int nlon, ncos, nsin;
+    char *eol;
+
+    column(inbuff, 0, 3, code);
+    if ((obscode = obscode_from_string(code))==OBSCODE_INVALID) continue;
+    if (strchr(inbuff, ':')!=NULL && strchr(inbuff, ':') < inbuff+30) {
+      fprintf(stderr,"Observatories file %s is not in the MPC ObsCodes format:\n->%s\n",
 	      fileName, inbuff);
       exit(1);
     }
-    if (obscode < OBSCODE_ORBITAL) {
-      /* This line specifies a ground-based location */
-      SITE *sss;
-      sss = &(sitelist[nsites]);
-      if (sscanf(inbuff,"%d %s %s %lf %n", &(sss->code), lonstring, latstring,
-		 &(sss->altitude), &nchar)!=4) {
-	fprintf(stderr,"Bad line in obseratories file %s:\n->%s\n",
-		fileName, inbuff);
+
+    if (nsites>=maxsites) {
+      maxsites = maxsites ? 2*maxsites : 1024;
+      if ((sitelist = realloc(sitelist, maxsites*sizeof(SITE)))==NULL) {
+	fprintf(stderr,"Out of memory reading observatories file %s\n", fileName);
 	exit(1);
       }
-      /* fprintf(stderr, "nchar: %i, strlen: %i\n",nchar, (int) strlen(inbuff)); */
-      if (nchar<(int) strlen(inbuff)) {
-	int nn;
-	nn = strcspn(inbuff+nchar,"\n");
-	if (nn>=80) nn=79;
-	strncpy(sss->name, inbuff+nchar, nn);
-	sss->name[nn]=0;
-      } else {
-	sss->name[0] = 0;
-      }
-      sss->lon = dmsdeg(lonstring)/15.;	/*convert longitude to hours*/
-      sss->lat = dmsdeg(latstring)*DTOR;
-      nsites++;
-
-    } else {
-      /* This is an orbiting observatory */
-      SPACECRAFT *sss;
-      sss = &(spacecraftlist[nspacecraft]);
-      if (sscanf(inbuff,"%d %s %lf %lf %lf %s %d", 
-		 &(sss->code), lonstring, &(sss->P),
-		 &(sss->precess), &(sss->jd0), latstring, 
-		 &nchar)!=6) {
-	fprintf(stderr,"Bad line in obseratories file %s:\n->%s\n",
-		fileName, inbuff);
-	exit(1);
-      }
-      if (nchar<(int)strlen(inbuff)) {
-	int nn;
-	nn = strcspn(inbuff+nchar,"\n");
-	if (nn>=80) nn=79;
-	strncpy(sss->name, inbuff+nchar, nn);
-	sss->name[nn]=0;
-      } else {
-	sss->name[0] = 0;
-      }
-      sss->i = dmsdeg(lonstring)*DTOR;	/*convert to radians*/
-      sss->ra0 = dmsdeg(latstring)*DTOR;
-
-      /* calculate the semi-major axis, in AU */
-      sss->a = pow( pow(sss->P*DAY,2.) * GM * EARTHMASS / (TPI*TPI),
-		    1./3.);
-      nspacecraft++;
     }
+    sss = &(sitelist[nsites]);
+    sss->code = obscode;
+    sss->warned = 0;
+
+    column(inbuff, 4, 13, lonstring);
+    column(inbuff, 13, 21, cosstring);
+    column(inbuff, 21, 30, sinstring);
+    nlon = sscanf(lonstring, "%lf", &lon);
+    ncos = sscanf(cosstring, "%lf", &(sss->rhocos));
+    nsin = sscanf(sinstring, "%lf", &(sss->rhosin));
+    if (nlon==1 && ncos==1 && nsin==1) {
+      sss->space = 0;
+      sss->lon = (360. - lon)/15.;	/*east degrees to west hours*/
+    } else if (nlon<=0 && ncos<=0 && nsin<=0) {
+      sss->space = 1;
+      sss->lon = sss->rhocos = sss->rhosin = 0.;
+    } else {
+      fprintf(stderr,"Bad line in observatories file %s:\n->%s\n",
+	      fileName, inbuff);
+      exit(1);
+    }
+
+    column(inbuff, 30, 30+79, sss->name);
+    for (eol=sss->name+strlen(sss->name); eol>sss->name && isspace((unsigned char) eol[-1]); eol--) ;
+    *eol = 0;
+    nsites++;
   }
   fclose(sitefile);
   
-  if (nsites<1 && nspacecraft<1) {
+  if (nsites<1) {
     fprintf(stderr,"Error: no observatory sites found\n");
     exit(1);
   }
@@ -1090,30 +1022,13 @@ bodycenter_ssbary(double jd,
   return;
 }
 
-/* Return the angle from zenith to the horizon for this observatory*/
+/* Return the angle from zenith to the horizon for this observatory.
+ * Observatories without a fixed location have no horizon (PI). */
 double
 zenith_horizon(int obscode) {
-  if (obscode < OBSCODE_ORBITAL)
-    return PI/2.;
-  else {
-    /* Do spherical-Earth limb calculation for orbiting spacecraft */
-    double a;
-    int i;
-    if (nsites<=0 && nspacecraft<=0) read_observatories(NULL); 
-    for (i=0; obscode!=spacecraftlist[i].code && i<nspacecraft; i++)  ;
-    if (i>=nspacecraft) {
-      fprintf(stderr,"Unknown spacecraft code %d, using barycenter\n",obscode);
-            if (obscode==OBSCODE_GEOCENTER) {
-                return 0.0;
-            }
-      /* exit(1); */
-    }
-    a = spacecraftlist[i].a;
-    a /= EQUAT_RAD/(1000.*R1.AU);
-    if (a < 1.) {
-      fprintf(stderr,"Your spacecraft is underground.  Oops.\n");
-      exit(1);
-    }
-    return PI - asin(1./a);
-  }
+  SITE *site;
+  if (obscode==OBSCODE_GEOCENTER) return PI;
+  site = find_site(obscode);
+  if (site==NULL || site->space) return PI;
+  return PI/2.;
 }

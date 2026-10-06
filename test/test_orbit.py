@@ -140,10 +140,45 @@ class OrbitFit(unittest.TestCase):
     def test_null_obseravtion(self):
         self.assertAlmostEqual(self.example_orbit.a.to(units.au).value/100, 137.91/100, 1)
 
+    def test_alphanumeric_obscode(self):
+        """
+        T14 (CFHT) sits beside 568 on Maunakea, so both codes must give the same orbit.
+        """
+        observations = [obs for obs in self.observations if not obs.null_observation]
+        for obs in observations:
+            obs.observatory_code = 'T14'
+        self.assertEqual(observations[0].observatory_code, 'T14')
+        orbit = mp_ephem.BKOrbit(observations)
+        self.assertAlmostEqual(orbit.a.to(units.AU).value, self.orbit.a.to(units.AU).value, 3)
+        self.assertAlmostEqual(orbit.e.value, self.orbit.e.value, 4)
+
+    def test_predict_space_observatory(self):
+        """
+        A space observatory without a supplied position is predicted from the geocenter.
+        """
+        self.orbit.predict(self.observations[0].date, obs_code=250)
+        geocentric = self.orbit.coordinate
+        self.orbit.predict(self.observations[0].date, obs_code=500)
+        self.assertAlmostEqual(geocentric.separation(self.orbit.coordinate).to(units.arcsec).value, 0, 6)
+
     def test_tnodb_discovery_flags(self):
         orbit = mp_ephem.BKOrbit(None, ast_filename=os.path.join(__PATH__,'data/o4h29.ast'))
         for observation in orbit.observations:
             self.assertTrue(observation.discovery)
+
+class ObservatoryCodes(unittest.TestCase):
+
+    def test_obscode_to_int(self):
+        for code, value in ((568, 568), ('568', 568), ('000', 0), ('I11', 1811), ('T14', 2914),
+                            ('W84', 3284), ('Z99', 3599), ('a05', 3605)):
+            self.assertEqual(mp_ephem.ephem.obscode_to_int(code), value)
+        for code in ('T1', 'TT4', ''):
+            self.assertRaises(ValueError, mp_ephem.ephem.obscode_to_int, code)
+
+    def test_known_codes(self):
+        for code in ('500', '568', 'T14', 'W84', '250'):
+            self.assertEqual(mp_ephem.ObsRecord(observatory_code=code).observatory_code, code)
+
 
 class CLASSYFORM(unittest.TestCase):
 

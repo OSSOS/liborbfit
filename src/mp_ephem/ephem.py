@@ -29,13 +29,36 @@ _KNOWN_OBSERVAOTRY_CODES = []
 __PATH__ = os.path.dirname(__file__)
 OBSERVATORIES_FILENAME = os.getenv('ORBIT_OBSERVATORIES', os.path.join(__PATH__, 'data', 'observatories.dat'))
 
-# Build a list of observatories our observatories.dat file knows about, we will set the remaining ones to 500
+_OBSCODE_RE = re.compile(r'^([0-9]{3}|[A-Za-z][0-9]{2})$')
+
+# Build a list of observatories our observatories.dat file (MPC ObsCodes layout) knows about,
+# we will set the remaining ones to 500
 observatories = open(OBSERVATORIES_FILENAME, mode='r', encoding='utf-8')
 for line in observatories.readlines():
-    if line.startswith('#'):
-        continue
-    _KNOWN_OBSERVAOTRY_CODES.append(line.split()[0])
+    if _OBSCODE_RE.match(line[0:3]):
+        _KNOWN_OBSERVAOTRY_CODES.append(line[0:3])
 observatories.close()
+
+
+def obscode_to_int(code):
+    """
+    Integer form of an MPC observatory code, as used by liborbfit.
+
+    The leading letter of an alphanumeric code is replaced by two digits (A=10 ... Z=35, a=36 ... z=61),
+    so I11 -> 1811 and T14 -> 2914.  Integers and all-digit strings are returned unchanged.
+
+    :param code: MPC observatory code, e.g. 568, '568' or 'T14'
+    :rtype: int
+    """
+    code = str(code).strip()
+    if code.isdigit():
+        return int(code)
+    if not _OBSCODE_RE.match(code):
+        raise ValueError("Invalid MPC observatory code: {}".format(code))
+    prefix = code[0]
+    prefix = ord(prefix) - ord('A') + 10 if prefix.isupper() else ord(prefix) - ord('a') + 36
+    return prefix * 100 + int(code[1:])
+
 
 MPCNOTES = {"Note1": {" ": " ",
                       "": " ",

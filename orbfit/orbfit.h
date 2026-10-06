@@ -22,15 +22,13 @@
  */
 #define OBS_ENVIRON "ORBIT_OBSERVATORIES"
 
-/*maximum number of observatories in data file*/
-#define MAX_SITES  400    
-
 /* Some magic numbers for observatories */
-#define OBSCODE_SSBARY 000
+/* MPC codes that start with a letter are stored as integers with
+ * A=10 ... Z=35, a=36 ... z=61 replacing the letter: I11 -> 1811, T14 -> 2914.
+ * MPC code 000 is Greenwich, so the barycenter needs a value no code maps to. */
+#define OBSCODE_INVALID (-1)
+#define OBSCODE_SSBARY (-2)
 #define OBSCODE_GEOCENTER 500
-/* obscodes above following are taken to be orbiting earth,
- * below this value they are affixed to earth */
-#define OBSCODE_ORBITAL 2000
 
 /*uncertainty assumed for MPC-format observations (arcsec)*/
 #define DEFAULT_DTHETA 0.3
@@ -169,9 +167,15 @@ observatory_geocenter(double jd,
 		      double *zobs);
 
 /* Read the observatory location from fname.  fname=NULL looks
- * in default/environment places.*/
+ * in default/environment places.  The file uses the MPC ObsCodes
+ * layout; entries without parallax constants are space observatories. */
 void
 read_observatories(char *fname);
+
+/* Integer form of an MPC observatory code ("568", "T14", or "2914").
+ * Returns OBSCODE_INVALID if the string is not a code. */
+int
+obscode_from_string(const char *code);
 
 /* Read the contents of an abg fromated file. */
 int
