@@ -1,6 +1,9 @@
 /* 	$Id: orbfit.h,v 1.1 2006/11/22 20:31:50 observe Exp $	 */
 /* Definitions for the orbit-fitting software */
+#ifndef ORBFIT_H
+#define ORBFIT_H
 #include "nrutil.h"
+#include "orbfit_api.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,6 +46,7 @@
 #define ARCSEC	(PI/180./3600.)
 #define DAY	(1./365.25)	/*Julian day, 86400 s*/
 #define SPEED_OF_LIGHT  63241.06515	/*in AU/YR*/
+#define AU_KM   149597870.7	/*IAU 2012 astronomical unit in km*/
 #define ECL	(23.43928*PI/180.)	/*Obliquity of ecliptic at J2000*/
 
 #define TSTEP	(20.*DAY)	/*Time step for orbit integrator*/
@@ -76,10 +80,10 @@ struct date_time
    {
 	int y;
 	int mo;
-	float d;
-	float h;
-	float mn;
-	float s;
+	double d;
+	double h;
+	double mn;
+	double s;
    };
 
 /* Data of an individual observation */
@@ -129,10 +133,6 @@ void
 earth3d(double t,	/* time is in years here */
 	int obscode,
 	double *x, double *y, double *z);
-/* UTC Julian Date to TT Julian Date.  DE405 is evaluated at TT. */
-double
-utc_jd_to_tt(double jd_utc);
-
 /*ICRS vector from SSBary to observatory location.
  * jd is a UTC Julian Date. */
 void
@@ -226,21 +226,6 @@ int
 read_radec(OBSERVATION obsarray[], 
 	   char *fname, 
 	   int *nobs);
-/* reset astrometric error assigned to MPC obs.*/
-void
-set_mpc_dtheta(double d);
-
-/* set filename for ephemeris or observatory data */
-void
-set_ephem_file(char *fname);
-void
-set_observatory_file(char *fname);
-
-/* Read these options */
-int
-read_options(int* iarg, 
-	     int argc,
-	     char *argv[]);
 
 /* preliminary fit to observations */
 void
@@ -363,3 +348,42 @@ is_visible(OBSERVATION *obs);
 void
 fake_observation(PBASIS *p, 
 		 OBSERVATION *obs);
+
+/* Sexagesimal string to decimal degrees (hmsdeg: hours to degrees) */
+double dmsdeg(const char *string);
+double hmsdeg(const char *string);
+
+/* Invert 1-indexed matrix in[1..dim][1..dim] into out; in is destroyed.
+ * Returns non-zero if the matrix is singular. */
+int invert_matrix(double **in, double **out, int dim);
+
+/* Geocentric ICRS x/y/z (km) to SSBary x/y/z (AU) at UTC JD jd */
+void geo_to_ssbary(double jd, double *x, double *y, double *z);
+
+/* Copy 0-indexed columns [start, end) of line into out (size end-start+1),
+ * stopping at the end of the line. */
+void copy_columns(const char *line, int start, int end, char *out);
+
+/* Error handling (orbfit_error.c).  orbfit_error() records and prints a
+ * message.  orbfit_fail() does the same and then longjmps to the guard
+ * installed by orbfit_begin(), or exits if there is none; orbfit_rethrow()
+ * jumps with the message already recorded.  An entry point calls setjmp()
+ * on its guard, then orbfit_begin(), and orbfit_end() before returning. */
+#include <setjmp.h>
+#ifdef __GNUC__
+#define ORBFIT_PRINTF __attribute__((format(printf, 1, 2)))
+#define ORBFIT_NORETURN __attribute__((noreturn))
+#else
+#define ORBFIT_PRINTF
+#define ORBFIT_NORETURN
+#endif
+void orbfit_error(const char *fmt, ...) ORBFIT_PRINTF;
+void orbfit_fail(const char *fmt, ...) ORBFIT_PRINTF ORBFIT_NORETURN;
+void orbfit_rethrow(void) ORBFIT_NORETURN;
+void orbfit_begin(jmp_buf *guard);
+void orbfit_end(void);
+
+/* Forget integrator state left by an interrupted calculation */
+void kbo3d_reset(void);
+
+#endif

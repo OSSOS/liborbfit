@@ -1,8 +1,5 @@
 /* 	$Id: orbfit2.c,v 2.0 2001/09/14 19:05:06 garyb Exp $	 */
 
-#ifndef lint
-static char vcid[] = "$Id: orbfit2.c,v 2.0 2001/09/14 19:05:06 garyb Exp $";
-#endif /* lint */
 /***** Routines that execute the fit of orbit to observation data. ****/
 /*** assembled 6/14/00 gmb from subroutines scattered about elsewhere.
 ** will use the mrqmin_orbit and mrqcof_orbit subroutines as well.
@@ -27,7 +24,7 @@ mrqmin_orbit(OBSERVATION obsarray[], int ndata, double a[], int ia[],
 		  int ma, double **covar, double **alpha, double *chisq,
 		  double *alamda, double energy_wt);
 
-void
+static void
 mrqfit(OBSERVATION *obsarray,
        int nobs,
        PBASIS *p,
@@ -41,7 +38,8 @@ mrqfit(OBSERVATION *obsarray,
  * covar should be 6x6 dmatrix upon entry, will hold covariance on exit.
  * Info on the fit is sent to logfile if it is non-NULL.
  */
-/* Return value is 5 if energy constraint is used, 6 otherwise */
+/* Return value is the number of fitted parameters: 4 if gdot is fixed,
+ * 5 if the energy constraint is used, 6 otherwise; -1 if nobs < 2. */
 int
 fit_observations(OBSERVATION obsarray[],
 		 int nobs,
@@ -51,19 +49,21 @@ fit_observations(OBSERVATION obsarray[],
 		 int *dof,
 		 FILE *logfile)
 {
-  int	*ia,i,j;
-  double *a;
+  int	*ia,i;
   double gbind2;
   double energy_fit;	/*weight given to binding-energy constraint*/
   int   fitparms=6;
-  a     = dvector(1,6);
+
+  if (nobs<2) {
+    orbfit_error("Not enough observations to fit an orbit: nobs=%d",nobs);
+    return -1;
+  }
+
   ia    = ivector(1,6);
   energy_fit = 0.;
 
   /* Don't even try the no-energy fit unless there are 3 observations*/
-  if (nobs<2) {
-    fprintf(stderr,"ERROR: not enough observations nobs=%d\n",nobs);
-  } else if (nobs==2) {
+  if (nobs==2) {
     fitparms=4;
   } else {
     prelim_fit(obsarray,nobs,p,covar);
@@ -143,7 +143,6 @@ fit_observations(OBSERVATION obsarray[],
     mrqfit(obsarray, nobs, p, ia, covar, chisq, energy_fit);
   }
 
-  free_dvector(a,1,6);
   free_ivector(ia,1,6);
 
   if (fitparms==4) {
@@ -159,7 +158,7 @@ fit_observations(OBSERVATION obsarray[],
 
 
 /* Subroutine which executes the mrqmin optimization */
-void
+static void
 mrqfit(OBSERVATION *obsarray,
        int nobs,
        PBASIS *p,
@@ -216,6 +215,8 @@ mrqfit(OBSERVATION *obsarray,
    p->g = a[5];
    p->gdot = a[6];
 
+   free_dvector(a,1,6);
+   free_dmatrix(alpha,1,6,1,6);
    return;
 }
 

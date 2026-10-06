@@ -1,8 +1,5 @@
 /* 	$Id: transforms.c,v 1.1 2006/11/22 20:31:50 observe Exp $	 */
 
-#ifndef lint
-static char vcid[] = "$Id: transforms.c,v 1.1 2006/11/22 20:31:50 observe Exp $";
-#endif /* lint */
 /*********** Coordinate transformation routines *************/
 /* All angles assumed to be in radians upon input */
 
@@ -16,7 +13,7 @@ eq_to_ec( double ra_eq,
 	  double *lon_ec,
 	  double **partials)
 {
-  double	sd,cd,cr,se,ce,y,x;
+  double	sd,cd,se,ce,y,x;
 
   se = sin(ECL);
   ce = cos(ECL);
@@ -75,7 +72,7 @@ ec_to_eq( double lat_ec,
 	  double *dec_eq,
 	  double **partials)
 {
-  double	sd,cd,cr,se,ce,y,x;
+  double	sd,cd,se,ce,y,x;
 
   se = sin(-ECL);
   ce = cos(ECL);
@@ -131,9 +128,9 @@ xyz_ec_to_eq(double x_ec, double y_ec, double z_ec,
 *** of projection as static variables to update as needed
 ****/
 
-double old_lat0=-999., old_lon0, clat0, slat0, clon0, slon0;
+static double old_lat0=-999., old_lon0, clat0, slat0, clon0, slon0;
 
-void
+static void
 check_latlon0(double lat0,
 	      double lon0) 
 {
@@ -186,7 +183,7 @@ ec_to_proj(double lat_ec,
   if (partials!=NULL) {
     partials[1][2] = clat;
     partials[1][1] = partials[2][2] = 0.;
-    partials[1][2] = 1.;
+    partials[2][1] = 1.;
   }
 
   return;
@@ -299,11 +296,23 @@ xyz_proj_to_ec( double x_p, double y_p, double z_p,
 }
 
  
+/* Below this fraction an orbit is taken as circular or in the ecliptic */
+#define ELEMENTS_TINY 1e-12
+
+/* Keep acos() arguments that rounding has pushed past +-1 in range */
+static double
+clamp_unit(double x)
+{
+  if (x > 1.) return 1.;
+  if (x < -1.) return -1.;
+  return x;
+}
+
 void
 orbitElements(XVBASIS *xv,
 	      ORBIT  *orb)
 {
-  int i,j,k;
+  int k;
 
   double combinedMass; /* mass of Sun + mass of KBO */ 
   double epochTime; 
@@ -325,8 +334,7 @@ orbitElements(XVBASIS *xv,
   double hMagnitude, ascendingNodeMagnitude; /* magnitude of angular momentum */
   double ascEccDotProduct, argumentOfPerifocus;
   double xBar, yBar;
-  double cosE, sinE, E1, E2, eccentricAnomaly;
-  /* E1 and E2 are used to decide the quadrant of Eccentric Anomaly */
+  double cosE, sinE, eccentricAnomaly;
   double meanAnomaly, meanMotion, timeOfPerifocalPassage;
 
   combinedMass = GM * 1.00134 ; /* Alter GM to account for total SS mass*/
@@ -370,38 +378,54 @@ orbitElements(XVBASIS *xv,
   hMagnitude = sqrt( angularMomentum[1]*angularMomentum[1] + 		    
 		     angularMomentum[2]*angularMomentum[2] +	
 		     angularMomentum[3]*angularMomentum[3] );
-  inclination = acos(angularMomentum[3]/hMagnitude); /* in radians here */
+  inclination = acos(clamp_unit(angularMomentum[3]/hMagnitude)); /* in radians here */
   ascendingNodeMagnitude = sqrt(ascendingNode[1]*ascendingNode[1] +
 				ascendingNode[2]*ascendingNode[2] +
 				ascendingNode[3]*ascendingNode[3]);
-  longitudeOfAscendingNode = acos(ascendingNode[1]/ascendingNodeMagnitude);
+  if (ascendingNodeMagnitude <= ELEMENTS_TINY*hMagnitude) {
+    /* Orbit in the ecliptic: the node is undefined, so measure from +x */
+    ascendingNode[1] = 1.;
+    ascendingNode[2] = ascendingNode[3] = 0.;
+    ascendingNodeMagnitude = 1.;
+  }
+  longitudeOfAscendingNode = acos(clamp_unit(ascendingNode[1]/ascendingNodeMagnitude));
   /* Capital Omega in radians here */
   if (ascendingNode[2] < 0) longitudeOfAscendingNode = 
 			      2*PI - longitudeOfAscendingNode;
-  /* ???could use atan2 here?? */
   ascEccDotProduct = ascendingNode[1]*eccentricityVector[1] +
     ascendingNode[2]*eccentricityVector[2] +
     ascendingNode[3]*eccentricityVector[3];
-  argumentOfPerifocus = acos(ascEccDotProduct/
-			     (ascendingNodeMagnitude*eccentricity)); 
-  /* Small omega in radians here */
-  if (eccentricityVector[3] < 0) argumentOfPerifocus = 
-				   2*PI - argumentOfPerifocus;
-  xBar = (semiLatusRectum - rMagnitude)/eccentricity;
-  yBar = radVelDotProduct*sqrt(semiLatusRectum/combinedMass)/eccentricity;
+  if (eccentricity <= ELEMENTS_TINY) {
+    /* Circular orbit: perihelion is undefined, put it at the node */
+    argumentOfPerifocus = 0.;
+  } else {
+    argumentOfPerifocus = acos(clamp_unit(ascEccDotProduct/
+					  (ascendingNodeMagnitude*eccentricity)));
+    /* Small omega in radians here */
+    if (eccentricityVector[3] < 0) argumentOfPerifocus = 
+				     2*PI - argumentOfPerifocus;
+  }
 
-  /* From here, we assume that the motion is elliptical */
+  if (eccentricity >= 1. || semimajor <= 0.) {
+    /* Unbound: no time of perihelion from the elliptical relations */
+    timeOfPerifocalPassage = NAN;
+  } else if (eccentricity <= ELEMENTS_TINY) {
+    timeOfPerifocalPassage = epochTime;
+  } else {
+    xBar = (semiLatusRectum - rMagnitude)/eccentricity;
+    yBar = radVelDotProduct*sqrt(semiLatusRectum/combinedMass)/eccentricity;
 
-  cosE = (xBar/semimajor) + eccentricity;
-  sinE = yBar/(semimajor*sqrt(1-eccentricity*eccentricity));
-  /* where semimajor*sqrt(1-eccentricity*eccentricity) is semiminor */
-  eccentricAnomaly = atan2(sinE,cosE);
+    cosE = (xBar/semimajor) + eccentricity;
+    sinE = yBar/(semimajor*sqrt(1-eccentricity*eccentricity));
+    /* where semimajor*sqrt(1-eccentricity*eccentricity) is semiminor */
+    eccentricAnomaly = atan2(sinE,cosE);
 
-  meanAnomaly = eccentricAnomaly - eccentricity*sinE; /* radians */
-  meanMotion = sqrt(combinedMass/(pow(semimajor,3.)));
-  timeOfPerifocalPassage = epochTime - meanAnomaly/meanMotion/DAY;
-  /* This comes from M=n(t-T) where t is epoch time and T is time of perifocal
-     passage, in days */
+    meanAnomaly = eccentricAnomaly - eccentricity*sinE; /* radians */
+    meanMotion = sqrt(combinedMass/(pow(semimajor,3.)));
+    timeOfPerifocalPassage = epochTime - meanAnomaly/meanMotion/DAY;
+    /* This comes from M=n(t-T) where t is epoch time and T is time of perifocal
+       passage, in days */
+  }
 				
   orb->a=semimajor;
   orb->e=eccentricity; 
@@ -430,7 +454,7 @@ date_to_jd(struct date_time date)
 	short dint;
 
 	if((date.y <= 1900) | (date.y >= 2100)) {
-		printf("Date out of range.  1900 - 2100 only.\n");
+		orbfit_error("Date year %d out of range.  1900 - 2100 only.", date.y);
 		return(0.);
 	}
 
@@ -462,15 +486,14 @@ elements_to_xv(ORBIT *o,
 	       double jd,
 	       XVBASIS *xv)
 {
-  double eccentricAnomaly, r0[3], v0[3], r1[3], v1[3], r2[3], v2[3];
+  double r0[3], v0[3], r1[3], v1[3], r2[3], v2[3];
   double meanAnomaly;
   double c, s, t, dt;
 
   double mu = GM*SSMASS;	/*use SSMASS, work in AU/yrs*/
 
   if (o->e >= 1. || o->a <=0.) {
-    fprintf(stderr,"elements_to_xv only for closed orbits now\n");
-    exit(1);
+    orbfit_fail("elements_to_xv only for closed orbits now");
   }
 
   /* get the eccentric Anomaly from the mean anomaly */
@@ -489,9 +512,8 @@ elements_to_xv(ORBIT *o,
     f   = x1 - o->e * sin(x1) - meanAnomaly;
     fmid= x2 - o->e * sin(x2) - meanAnomaly;
     if (f*fmid > 0.0) {
-      fprintf(stderr,"Error, eccentricAnomaly root not bracketed\n");
-      fprintf(stderr,"f, fmid %f %f\n",f,fmid);
-      exit(1);
+      orbfit_fail("Error, eccentricAnomaly root not bracketed: f, fmid %f %f",
+		  f, fmid);
     }
 
     rtb = f < 0.0 ? (dx=x2-x1,x1) : (dx=x1-x2,x2);
@@ -502,8 +524,7 @@ elements_to_xv(ORBIT *o,
       if (fabs(dx) < TOLERANCE || fmid == 0.0) break;
     }
     if (j>=JMAX) {
-      fprintf(stderr,"eccentricAnomaly took too long\n");
-      exit(1);
+      orbfit_fail("eccentricAnomaly took too long");
     }
     meanAnomaly = rtb;
 #undef JMAX

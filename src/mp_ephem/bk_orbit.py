@@ -7,6 +7,7 @@ import numpy
 import os
 import random
 import tempfile
+import threading
 from astropy import units
 from astropy.coordinates import SkyCoord
 from astropy.time import Time
@@ -28,9 +29,50 @@ __author__ = 'jjk'
 
 
 class BKOrbitError(Exception):
-    def __init__(self):
-        super(BKOrbitError, self).__init__(
-            "Insufficient observations for an orbit.")
+    def __init__(self, message="Insufficient observations for an orbit."):
+        super(BKOrbitError, self).__init__(message)
+
+
+# liborbfit is not reentrant: the fit's coordinate system, the orbit
+# integrator and the arrays the entry points return are all static storage
+# in the library, and ctypes releases the GIL during a call.  Every call into
+# the library, and the copy of its result, holds this lock.
+_ORBFIT_LOCK = threading.Lock()
+_ORBFIT_RESULT_SIZES = {'fitradec': 2, 'abg_to_aei': 15, 'predict': 8, 'predict_helio': 3}
+_orbfit_lib = None
+
+
+def _load_orbfit():
+    """Load liborbfit once and declare the signatures of its entry points."""
+    global _orbfit_lib
+    with _ORBFIT_LOCK:
+        if _orbfit_lib is not None:
+            return _orbfit_lib
+        path = os.path.dirname(__file__)
+        lib = ctypes.CDLL(glob.glob(os.path.join(path, 'orbfit*.so'))[0])
+        for name, size in _ORBFIT_RESULT_SIZES.items():
+            getattr(lib, name).restype = ctypes.POINTER(ctypes.c_double * size)
+        lib.fitradec.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+        lib.abg_to_aei.argtypes = [ctypes.c_char_p]
+        lib.predict.argtypes = [ctypes.c_char_p, ctypes.c_double, ctypes.c_int]
+        lib.predict_helio.argtypes = [ctypes.c_char_p, ctypes.c_double, ctypes.c_int]
+        lib.orbfit_last_error.restype = ctypes.c_char_p
+        lib.orbfit_last_error.argtypes = []
+        _orbfit_lib = lib
+        return lib
+
+
+def _orbfit_call(lib, name, *args):
+    """Call a liborbfit entry point and return a copy of its result array.
+
+    :raises BKOrbitError: if the library reports an error (the result is then all NaN).
+    """
+    with _ORBFIT_LOCK:
+        result = list(getattr(lib, name)(*args).contents)
+        message = lib.orbfit_last_error()
+    if message:
+        raise BKOrbitError("{}: {}".format(name, message.decode('utf-8', errors='replace')))
+    return result
 
 
 class BKOrbit(object):
@@ -47,8 +89,6 @@ class BKOrbit(object):
         :rtype : Orbfit
         """
         __PATH__ = os.path.dirname(__file__)
-        # find the orbit.so library
-        __ORBFIT_LIB__ = glob.glob(os.path.join(__PATH__, 'orbfit*.so'))[0]
 
         # Choose a format of JPL binary ephemeris file
         is_64bits = ctypes.sizeof(ctypes.c_voidp) == 8
@@ -60,8 +100,7 @@ class BKOrbit(object):
                                                       os.path.join(__PATH__,
                                                                    'data',
                                                                    'observatories.dat'))
-        liborbfit = os.path.join(__ORBFIT_LIB__)
-        self.orbfit = ctypes.CDLL(liborbfit)
+        self.orbfit = _load_orbfit()
 
         if ast_filename is None:
             assert isinstance(observations, tuple) or isinstance(observations, list) or isinstance(observations,
@@ -120,8 +159,6 @@ class BKOrbit(object):
 
     def _fit_radec(self, randomize=False):  # noqa: C901
         # call fit_radec with mpc file and abgfile
-        self.orbfit.fitradec.restype = ctypes.POINTER(ctypes.c_double * 2)
-        self.orbfit.fitradec.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
         build_abg = True
         if self.abg_filename is not None and os.access(self.abg_filename, os.R_OK):
             build_abg = False
@@ -173,30 +210,36 @@ class BKOrbit(object):
             else:
                 _abg_file = open(self.abg_filename, 'w+')
                 _abg_file_name = _abg_file.name
-            _ = self.orbfit.fitradec(ctypes.c_char_p(bytes(_mpc_file.name, 'utf-8')),
-                                     ctypes.c_char_p(bytes(_abg_file_name, 'utf-8')))
+            try:
+                _orbfit_call(self.orbfit, 'fitradec',
+                             bytes(_mpc_file.name, 'utf-8'), bytes(_abg_file_name, 'utf-8'))
+            except BKOrbitError:
+                _abg_file.close()
+                raise
 
         _abg_file.seek(0)
 
         # call abg_to_aei to get elliptical elements and their chi^2 uncertainty.
-        self.orbfit.abg_to_aei.restype = ctypes.POINTER(ctypes.c_double * 15)
-        self.orbfit.abg_to_aei.argtypes = [ctypes.c_char_p]
-        result = self.orbfit.abg_to_aei(ctypes.c_char_p(bytes(_abg_file.name, 'utf-8')))
-        self._a = result.contents[0] * units.AU
-        self._da = result.contents[6] * units.AU
-        self._e = result.contents[1] * units.dimensionless_unscaled
-        self._de = result.contents[7] * units.dimensionless_unscaled
-        self._inc = result.contents[2] * units.degree
-        self._dinc = result.contents[8] * units.degree
-        self._Node = result.contents[3] * units.degree
-        self._dNode = result.contents[9] * units.degree
-        self._om = result.contents[4] * units.degree
-        self._dom = result.contents[10] * units.degree
-        self._T = result.contents[5] * units.day
-        self._dT = result.contents[11] * units.day
-        self._epoch = Time(result.contents[12] * units.day, scale='utc', format='jd')
-        self._distance = result.contents[13] * units.au
-        self._distance_uncertainty = result.contents[14] * units.au
+        try:
+            result = _orbfit_call(self.orbfit, 'abg_to_aei', bytes(_abg_file.name, 'utf-8'))
+        except BKOrbitError:
+            _abg_file.close()
+            raise
+        self._a = result[0] * units.AU
+        self._da = result[6] * units.AU
+        self._e = result[1] * units.dimensionless_unscaled
+        self._de = result[7] * units.dimensionless_unscaled
+        self._inc = result[2] * units.degree
+        self._dinc = result[8] * units.degree
+        self._Node = result[3] * units.degree
+        self._dNode = result[9] * units.degree
+        self._om = result[4] * units.degree
+        self._dom = result[10] * units.degree
+        self._T = result[5] * units.day
+        self._dT = result[11] * units.day
+        self._epoch = Time(result[12] * units.day, scale='utc', format='jd')
+        self._distance = result[13] * units.au
+        self._distance_uncertainty = result[14] * units.au
         _abg_file.seek(0)
         self.abg = _abg_file.read()
         _abg_file.close()
@@ -548,12 +591,9 @@ class BKOrbit(object):
             abg_file.write(bytes(self.abg, 'utf-8'))
             abg_file.seek(0)
 
-        self.orbfit.predict_helio.restype = ctypes.POINTER(ctypes.c_double * 3)
-        self.orbfit.predict_helio.argtypes = [ctypes.c_char_p, ctypes.c_double, ctypes.c_int]
-        predict = self.orbfit.predict_helio(ctypes.c_char_p(bytes(abg_file.name, 'utf-8')),
-                                            jd,
-                                            ctypes.c_int(obscode_to_int(obs_code)))
-        self.helio = numpy.array((predict.contents[0], predict.contents[1], predict.contents[2])) * units.au
+        predict = _orbfit_call(self.orbfit, 'predict_helio', bytes(abg_file.name, 'utf-8'),
+                               jd, obscode_to_int(obs_code))
+        self.helio = numpy.array(predict) * units.au
 
     def predict(self, date, obs_code=568, abg_file=None, minimum_delta=None):
         """
@@ -593,20 +633,17 @@ class BKOrbit(object):
             abg_file.write(bytes(self.abg, 'utf-8'))
             abg_file.seek(0)
 
-        self.orbfit.predict.restype = ctypes.POINTER(ctypes.c_double * 8)
-        self.orbfit.predict.argtypes = [ctypes.c_char_p, ctypes.c_double, ctypes.c_int]
-        predict = self.orbfit.predict(ctypes.c_char_p(bytes(abg_file.name, 'utf-8')),
-                                      jd,
-                                      ctypes.c_int(obscode_to_int(obs_code)))
+        predict = _orbfit_call(self.orbfit, 'predict', bytes(abg_file.name, 'utf-8'),
+                               jd, obscode_to_int(obs_code))
         self._coordinate = None
-        self._ra = predict.contents[0] * units.degree
-        self._dec = predict.contents[1] * units.degree
-        self._lon = predict.contents[6] * units.degree
-        self._lat = predict.contents[7] * units.degree
-        self._dra = predict.contents[2] * units.arcsec
-        self._ddec = predict.contents[3] * units.arcsec
-        self._pa = predict.contents[4] * units.degree
-        self._distance = predict.contents[5] * units.AU
+        self._ra = predict[0] * units.degree
+        self._dec = predict[1] * units.degree
+        self._lon = predict[6] * units.degree
+        self._lat = predict[7] * units.degree
+        self._dra = predict[2] * units.arcsec
+        self._ddec = predict[3] * units.arcsec
+        self._pa = predict[4] * units.degree
+        self._distance = predict[5] * units.AU
         self._date = str(_date)
         self._time = _date
         self._set_coordinates()

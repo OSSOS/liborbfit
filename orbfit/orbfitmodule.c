@@ -1,94 +1,90 @@
 #include "orbfit.h"
+#include "orbfit_api.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 
-double *fitradec(char *mpc_filename, char *abg_filename)
+/* Each entry point installs a guard so that orbfit_fail() anywhere below
+ * returns here: the results are left as NaN, every Numerical Recipes
+ * allocation still live is released and the integrator state is dropped. */
+#define ORBFIT_GUARD(guard, result, n)		\
+  do {						\
+    fill_nan(result, n);			\
+    if (setjmp(guard)) {			\
+      nr_free_all();				\
+      kbo3d_reset();				\
+      fill_nan(result, n);			\
+      orbfit_end();				\
+      return result;				\
+    }						\
+    orbfit_begin(&guard);			\
+  } while (0)
+
+static void
+fill_nan(double *result, int n)
 {
+  int i;
+  for (i = 0; i < n; i++) result[i] = NAN;
+}
 
-  FILE *abg_file ;
-  FILE *res_file ;
+static void
+write_abg(const char *abg_filename, PBASIS *p, double **covar)
+{
+  FILE *abg_file;
 
-  OBSERVATION obsarray[MAXOBS];
-  int     nobs;
+  if ((abg_file = fopen(abg_filename,"w")) == NULL)
+    orbfit_fail("Error opening a/b/g output file %s", abg_filename);
 
-  ORBIT orbit;
-  PBASIS p;
-  XVBASIS xv;
-
-  double d, dd;
-  static double result[2];
-  double **covar;
-  double chisq;
-  int i; 
-  int dof;
-
-  covar = dmatrix(1,6,1,6);
-
-
-  if (read_radec(obsarray, mpc_filename, &nobs)) {
-    fprintf(stderr, "Error reading input observations\n");
-    return result ;
-  }
-
-   /*
-  for (i=0;i<nobs;i++) {
-    fprintf(stderr, "%lf %d %lf %lf %lf\n", obsarray[i].obstime, obsarray[i].obscode,
-            obsarray[i].xe, obsarray[i].ye, obsarray[i].ze);
-  }
-  */
-  /* Call subroutine to do the actual fitting: */
-  fit_observations(obsarray, nobs, &p, covar, &chisq, &dof, NULL);
-
-
-  abg_file = fopen(abg_filename,"w");
-
-  /* fprintf(stderr, "# Chi-squared of fit: %.2f DOF: %d\n",chisq,dof); */
   fprintf(abg_file, "# Exact a, adot, b, bdot, g, gdot:\n");
-  fprintf(abg_file, "%11.8f %11.8f %11.8f %11.8f %11.8f %11.8f\n",p.a,p.adot,p.b,
-  	p.bdot, p.g, p.gdot);
-  pbasis_to_bary(&p, &xv, NULL);
-
-  orbitElements(&xv, &orbit);
-  /* fprintf(stderr, "# a=%f AU,e=%f,i=%f deg\n",orbit.a, orbit.e, orbit.i); */
-  d = sqrt(xBary*xBary + yBary*yBary + pow(zBary-1/p.g,2.));
-  dd = d*d*sqrt(covar[5][5]);
-  /* fprintf(stderr, "# Barycentric distance %.3f+-%.3f\n",d,dd); */
-
-  /* Print the covariance matrix to the agb_file */
-  /* write the covariance to the agbfile */
+  fprintf(abg_file, "%.17g %.17g %.17g %.17g %.17g %.17g\n",p->a,p->adot,p->b,
+  	p->bdot, p->g, p->gdot);
 
   fprintf(abg_file, "# Covariance matrix: \n");
-
   print_matrix(abg_file, covar, 6, 6);
-
-
 
   /* Print out information on the coordinate system */
   fprintf(abg_file, "#     lat0       lon0       xBary     yBary      zBary   JD0\n");
-  fprintf(abg_file, "%12.7f %12.7f %10.7f %10.7f %10.7f  %.6f\n",
+  fprintf(abg_file, "%.17g %.17g %.17g %.17g %.17g %.17g\n",
 	 lat0/DTOR,lon0/DTOR,xBary,yBary,zBary,jd0);
 
-  fclose(abg_file);
+  if (fclose(abg_file) != 0)
+    orbfit_fail("Error writing a/b/g output file %s", abg_filename);
+}
 
-  /* Dump residuals to res_file */
-  /*
-  res_file = stderr;
-  fprintf(res_file,"Best fit orbit gives:\n");
-  fprintf(res_file,"obs  time        x      x_resid       y   y_resid\n");
-  for (i=0; i<nobs; i++) {
-    double x,y;
-    kbo2d(&p, &obsarray[i], &x, NULL, &y, NULL);
-    fprintf(res_file,"%3d %9.4f %10.3f %7.3f %10.3f %7.3f\n",
-	    i, obsarray[i].obstime,
-	    obsarray[i].thetax/ARCSEC, (obsarray[i].thetax-x)/ARCSEC,
-	    obsarray[i].thetay/ARCSEC, (obsarray[i].thetay-y)/ARCSEC);
-  }
-  */
+double *fitradec(char *mpc_filename, char *abg_filename)
+{
+  static double result[2];
+  jmp_buf guard;
+  OBSERVATION *obsarray;
+  int     nobs;
+  PBASIS p;
+  double d, dd;
+  double **covar;
+  double chisq;
+  int dof;
 
-  free_dmatrix(covar,1,6,1,6);
+  ORBFIT_GUARD(guard, result, 2);
+
+  obsarray = nr_malloc(MAXOBS*sizeof(OBSERVATION));
+  covar = dmatrix(1,6,1,6);
+
+  if (read_radec(obsarray, mpc_filename, &nobs)) orbfit_rethrow();
+
+  /* Call subroutine to do the actual fitting: */
+  if (fit_observations(obsarray, nobs, &p, covar, &chisq, &dof, NULL) < 0)
+    orbfit_rethrow();
+
+  write_abg(abg_filename, &p, covar);
+
+  /* Barycentric distance and its uncertainty */
+  d = sqrt(xBary*xBary + yBary*yBary + pow(zBary-1/p.g,2.));
+  dd = d*d*sqrt(covar[5][5]);
   result[0] = d;
   result[1] = dd;
+
+  free_dmatrix(covar,1,6,1,6);
+  nr_free(obsarray);
+  orbfit_end();
   return result;
 }
 
@@ -99,24 +95,18 @@ double *fitradec(char *mpc_filename, char *abg_filename)
 
 double *predict_helio(char *abg_file, double jdate, int obscode) {
 
+  static double result[3];
+  jmp_buf guard;
   PBASIS p;
   OBSERVATION futobs;
-  static double result[4];
   double xk[3];
   double **covar;
-  int i;
+
+  ORBFIT_GUARD(guard, result, 3);
 
   covar = dmatrix(1,6,1,6);
 
-  for (i = 0; i < 4; i++) {
-    result[i] = -1.0;
-  }
-
-  if (read_abg(abg_file, &p, covar)) {
-    fprintf(stderr, "Error input alpha/beta/gamma file %s\n", abg_file);
-    return result;
-  }
-
+  if (read_abg(abg_file, &p, covar)) orbfit_rethrow();
 
   /* get observatory code */
   futobs.obscode = obscode;
@@ -124,16 +114,17 @@ double *predict_helio(char *abg_file, double jdate, int obscode) {
   futobs.obstime = (jdate - jd0) * DAY;
   futobs.xe = -999.;        /* Force evaluation of earth3d */
 
-
   kbo3d_helio(&p, &futobs, xk);
 
   result[0] = xk[0];
   result[1] = xk[1];
   result[2] = xk[2];
 
+  free_dmatrix(covar,1,6,1,6);
+  orbfit_end();
   return result;
-
 }
+
 /* predict.c - Read a file containing a/b/g orbit fit, and spit out
  *  predicted RA & dec plus uncertainties on arbitrary date.
  * 8/12/99 gmb
@@ -141,22 +132,17 @@ double *predict_helio(char *abg_file, double jdate, int obscode) {
 
 double *predict(char *abg_file, double jdate, int obscode)
 {
-
+  static double result[8];
+  jmp_buf guard;
   PBASIS p;
   OBSERVATION	futobs;
-  struct date_time dt;
-  char	inbuff[256], rastring[20], decstring[20];
-  char  outbuff[256];
-  char  *f_string;
   double **covar,**sigxy,a,b,PA,**derivs;
   double lat,lon,**covecl;
   double ra,dec, **coveq;
-  double yr,mo,day,hr,mn,ss;
   double xx,yy,xy,bovasqrd,det;
   double distance;
-  static double result[8];
-  int i,nfields;
-  int iarg=1;
+
+  ORBFIT_GUARD(guard, result, 8);
 
   sigxy = dmatrix(1,2,1,2);
   derivs = dmatrix(1,2,1,2);
@@ -164,15 +150,7 @@ double *predict(char *abg_file, double jdate, int obscode)
   covecl = dmatrix(1,2,1,2);
   coveq = dmatrix(1,2,1,2);
 
-    for (i=0;i<8;i++){
-        result[i] = -1.0;
-    }
-
-  if (read_abg(abg_file,&p,covar) ) { 
-    fprintf(stderr, "Error input alpha/beta/gamma file %s\n",abg_file);
-    return result;
-  }
-
+  if (read_abg(abg_file,&p,covar)) orbfit_rethrow();
 
   /* get observatory code */
   futobs.obscode=obscode;
@@ -182,8 +160,6 @@ double *predict(char *abg_file, double jdate, int obscode)
 
   distance = predict_posn(&p,covar,&futobs,sigxy);
 
-
-  
   /* Now transform to RA/DEC, via ecliptic*/
   proj_to_ec(futobs.thetax,futobs.thetay,
 	     &lat, &lon,
@@ -214,42 +190,45 @@ double *predict(char *abg_file, double jdate, int obscode)
   dec /= DTOR;
   lat /= DTOR;
   lon /= DTOR;
-    if (lon<0.) lon+= 360.;
+  if (lon<0.) lon+= 360.;
 
-   result[0] = ra;
-   result[1] = dec;
-   result[2] = a/ARCSEC;
-   result[3] = b/ARCSEC;
-   result[4] = PA;
-   result[5] = distance;
-   result[6] = lon;
-   result[7] = lat;
+  result[0] = ra;
+  result[1] = dec;
+  result[2] = a/ARCSEC;
+  result[3] = b/ARCSEC;
+  result[4] = PA;
+  result[5] = distance;
+  result[6] = lon;
+  result[7] = lat;
 
+  free_dmatrix(sigxy,1,2,1,2);
+  free_dmatrix(derivs,1,2,1,2);
+  free_dmatrix(covar,1,6,1,6);
+  free_dmatrix(covecl,1,2,1,2);
+  free_dmatrix(coveq,1,2,1,2);
+  orbfit_end();
   return result;
-
 }
 
 
 double *abg_to_aei(char *abg_file)
 {
+  static double result[15];
+  jmp_buf guard;
   PBASIS p;
   XVBASIS xv;
   ORBIT orbit;
-  static double result[15];
   double d, dd;
   double  **covar_abg, **covar_xyz, **derivs, **covar_aei;
 
-  int	i,j;
+  ORBFIT_GUARD(guard, result, 15);
 
   covar_abg = dmatrix(1,6,1,6);
   covar_xyz = dmatrix(1,6,1,6);
   covar_aei = dmatrix(1,6,1,6);
   derivs = dmatrix(1,6,1,6);
 
-  if (read_abg(abg_file,&p,covar_abg)) {
-    fprintf(stderr, "Error in input alpha/beta/gamma file\n");
-    exit(1);
-  }
+  if (read_abg(abg_file,&p,covar_abg)) orbfit_rethrow();
 
   /* Transform the orbit basis and get the deriv. matrix */
   pbasis_to_bary(&p, &xv, derivs);
@@ -269,22 +248,6 @@ double *abg_to_aei(char *abg_file)
   d = sqrt(xBary*xBary + yBary*yBary + pow(zBary-1/p.g,2.));
   dd = d*d*sqrt(covar_abg[5][5]);
 
-  /* Print out the results, with comments */
-  /*
-  printf(aei_file,"# Barycentric osculating elements in ICRS at epoch %.1f:\n",jd0);
-  printf("#    a            e       i      Node   Arg of Peri   Time of Peri\n");
-  printf("%12.6f  %9.6f  %8.3f %8.3f  %8.3f %11.3f\n",
-  	 orbit.a, orbit.e, orbit.i, orbit.lan, orbit.aop, orbit.T);
-  fprintf("+-%10.6f  %9.6f  %8.3f %8.3f  %8.3f %11.3f\n",
-     sqrt(covar_aei[1][1]),
-  	 sqrt(covar_aei[2][2]),
-  	 sqrt(covar_aei[3][3])/DTOR,
-     sqrt(covar_aei[4][4])/DTOR,
-	 sqrt(covar_aei[5][5])/DTOR,
-	 sqrt(covar_aei[6][6])/DAY);
-  fprintf("# covariance matrix:\n");
-  fprint_matrix(stdout,covar_aei,6,6);
-  */
   result[0] = orbit.a;
   result[1] = orbit.e;
   result[2] = orbit.i;
@@ -305,6 +268,6 @@ double *abg_to_aei(char *abg_file)
   free_dmatrix(covar_xyz,1,6,1,6);
   free_dmatrix(covar_aei,1,6,1,6);
   free_dmatrix(derivs,1,6,1,6);
+  orbfit_end();
   return result;
 }
-

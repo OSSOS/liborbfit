@@ -16,8 +16,6 @@ void mrqmin_orbit(OBSERVATION obsarray[], int ndata, double a[], int ia[],
 		  int ma, double **covar, double **alpha, double *chisq,
 		  double *alamda, double energy_wt)
 {
-	void covsrt(double **covar, int ma, int ia[], int mfit);
-	void gaussj(double **a, int n, double **b, int m);
 	void mrqcof_orbit(OBSERVATION obsarray[],
 			  int ndata, double a[], int ia[],
 			  int ma, double **alpha, double beta[], double *chisq,
@@ -64,8 +62,8 @@ void mrqmin_orbit(OBSERVATION obsarray[], int ndata, double a[], int ia[],
 	}
 	for (j=0,l=1;l<=ma;l++)
 		if (ia[l]) atry[l]=a[l]+da[++j];
-		mrqcof_orbit(obsarray,ndata,atry,ia,ma,covar,da,chisq,
-			     energy_wt);
+	mrqcof_orbit(obsarray,ndata,atry,ia,ma,covar,da,chisq,
+		     energy_wt);
 	if (*chisq < ochisq) {
 		*alamda *= 0.1;
 		ochisq=(*chisq);

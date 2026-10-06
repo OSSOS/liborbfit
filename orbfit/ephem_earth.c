@@ -1,8 +1,4 @@
 /* 	$Id: ephem_earth.c,v 1.1 2006/11/22 20:31:50 observe Exp $	 */
-/* 	$Id: ephem_earth.c,v 1.1 2006/11/22 20:31:50 observe Exp $	 */
-#ifndef lint
-static char vcid[] = "$Id: ephem_earth.c,v 1.1 2006/11/22 20:31:50 observe Exp $"; 
-#endif /* lint */
 /*** ephem_earth.c  - I've changed the below to include a routine explicitly
 *** returning the location of earth geocenter relative to SSBARY.  Also
 *** have eliminated the nutation & libration routines.
@@ -34,14 +30,14 @@ typedef struct {
 } SITE;
 static SITE *sitelist=NULL;
 
-char  observatory_file[FNAMESIZE]="";
+static char  observatory_file[FNAMESIZE]="";
 void
 set_observatory_file(char *fname) {
   strncpy(observatory_file, fname, FNAMESIZE-1);
   observatory_file[FNAMESIZE-1]=0;
 }
 
-char  ephem_file[FNAMESIZE]="";
+static char  ephem_file[FNAMESIZE]="";
 void
 set_ephem_file(char *fname) {
   strncpy(ephem_file, fname, FNAMESIZE-1);
@@ -95,6 +91,10 @@ set_ephem_file(char *fname) {
    static recOneType   R1;
    static FILE        *Ephemeris_File;
    static double       Coeff_Array[ARRAY_SIZE] , T_beg , T_end , T_span;
+   static double       T_first;          /* start of the first data record */
+   static double       Record_span;      /* days covered by each record */
+   static long         N_records;        /* data records in the file */
+   static int          Ephemeris_ready = 0;
 
    static int Debug = FALSE;             /* Generates detailed output if true */
 
@@ -110,57 +110,45 @@ set_ephem_file(char *fname) {
 /**                                                                          **/
 /**==========================================================================**/
 
-void Read_Coefficients( double Time )
+static void Read_Coefficients( double Time )
 {
-  double  T_delta = 0.0;
-  long     Offset  =  0 ;		/*** ??? change to long 8/9/99 ***/
+  double  buffer[ARRAY_SIZE];
+  long    record;
+  long    record_bytes = (long) (ARRAY_SIZE*sizeof(double));
 
-  /*--------------------------------------------------------------------------*/
-  /*  Find ephemeris data that record contains input time. Note that one, and */
-  /*  only one, of the following conditional statements will be true (if both */
-  /*  were false, this function would not have been called).                  */
-  /*--------------------------------------------------------------------------*/
+  if (!Ephemeris_ready)
+    orbfit_fail("Ephemeris file has not been initialized");
 
-  if ( Time < T_beg )                    /* Compute backwards location offset */
-     {
-       T_delta = T_beg - Time;
-       Offset  = (int) -ceil(T_delta/T_span);	/***Needed negative sign here???*/
-     }
+  /* Records are of equal length and follow the two header records. */
+  if (!(Time >= T_first && Time <= T_first + N_records*Record_span))
+    orbfit_fail("JD %.2f is out of range of ephemeris file", Time);
+  record = (long) floor((Time - T_first)/Record_span);
+  if (record >= N_records) record = N_records - 1;
 
-  if ( Time > T_end )                    /* Compute forewards location offset */
-     {
-       T_delta = Time - T_end;
-       Offset  = (int) ceil(T_delta/T_span);
-     }
+  if (fseek(Ephemeris_File, (2+record)*record_bytes, SEEK_SET) != 0
+      || fread(buffer,sizeof(double),ARRAY_SIZE,Ephemeris_File) != ARRAY_SIZE)
+    orbfit_fail("Error reading record %ld of ephemeris file", record);
+  if (Time < buffer[0] || Time > buffer[1])
+    orbfit_fail("JD %.2f is not in ephemeris record %ld (%.2f - %.2f)",
+		Time, record, buffer[0], buffer[1]);
 
-  /*--------------------------------------------------------------------------*/
-  /*  Retrieve ephemeris data from new record.                                */
-  /*--------------------------------------------------------------------------*/
-
-  fseek(Ephemeris_File,(Offset-1)*ARRAY_SIZE*sizeof(double),SEEK_CUR);
-  fread(&Coeff_Array,sizeof(double),ARRAY_SIZE,Ephemeris_File);
-  
+  memcpy(Coeff_Array, buffer, sizeof buffer);
   T_beg  = Coeff_Array[0];
   T_end  = Coeff_Array[1];
   T_span = T_end - T_beg;
 
-  if (Time < T_beg || Time > T_end) {
-    fprintf(stderr,"JD %.2f is out of range of ephemeris file\n",Time);
-    exit(1);
-  }
   /*--------------------------------------------------------------------------*/
   /*  Debug print (optional)                                                  */
   /*--------------------------------------------------------------------------*/
 
   if ( Debug ) 
      {
-       printf("\n  In: Read_Coefficients \n");
-       printf("\n      ARRAY_SIZE = %4d",ARRAY_SIZE);
-       printf("\n      Offset  = %3ld",Offset);
-       printf("\n      T_delta = %7.3f",T_delta);
-       printf("\n      T_Beg   = %7.3f",T_beg);
-       printf("\n      T_End   = %7.3f",T_end);
-       printf("\n      T_Span  = %7.3f\n\n",T_span);
+       fprintf(stderr,"\n  In: Read_Coefficients \n");
+       fprintf(stderr,"\n      ARRAY_SIZE = %4d",ARRAY_SIZE);
+       fprintf(stderr,"\n      Record  = %3ld",record);
+       fprintf(stderr,"\n      T_Beg   = %7.3f",T_beg);
+       fprintf(stderr,"\n      T_End   = %7.3f",T_end);
+       fprintf(stderr,"\n      T_Span  = %7.3f\n\n",T_span);
      }
 
 }
@@ -172,9 +160,7 @@ void Read_Coefficients( double Time )
 /**     ephemeris data. It opens the ephemeris data file, reads the header   **/
 /**     data, loads the first coefficient record into a global array, then   **/
 /**     returns a status code that indicates whether or not all of this was  **/
-/**     done successfully.                                                   **/
-/**                                                                          **/
-/**  Input: A character string giving the name of an ephemeris data file.    **/
+/**     done successfully.  A failed call can be retried.                     **/
 /**                                                                          **/
 /**  Returns: An integer status code.                                        **/
 /**                                                                          **/
@@ -183,18 +169,13 @@ void Read_Coefficients( double Time )
  ** for the file itself, as environment-specified file or as default in
  ** this directory
  **/
-int Initialize_Ephemeris()
+static int Initialize_Ephemeris(void)
 {
   int headerID;
+  long file_bytes, record_bytes = (long) (ARRAY_SIZE*sizeof(double));
   char fileName[FNAMESIZE];
-  /*** gmb: don't duplicate this call */
-  static int init=0;
-  if (init) return SUCCESS;
-  init = 1;
 
-  /*--------------------------------------------------------------------------*/
-  /*  Open ephemeris file.                                                    */
-  /*--------------------------------------------------------------------------*/
+  if (Ephemeris_ready) return SUCCESS;
 
   /** use previously specified filename,
    ** or environment-specified file, or the default filename, in that order
@@ -205,68 +186,69 @@ int Initialize_Ephemeris()
     strncpy(fileName, getenv(EPHEM_ENVIRON), FNAMESIZE-1);
   else
     strncpy(fileName, DEFAULT_EPHEM_FILE, FNAMESIZE-1);
-
-
   fileName[FNAMESIZE-1]=0;
 
-  
-  Ephemeris_File = fopen(fileName,"r");
-
-  /*--------------------------------------------------------------------------*/
-  /*  Read header & first coefficient array, then return status code.         */
-  /*--------------------------------------------------------------------------*/
-
-  if ( Ephemeris_File == NULL ) /*........................No need to continue */
+  Ephemeris_File = fopen(fileName,"rb");
+  if ( Ephemeris_File == NULL )
      {
-       printf("\n Unable to open ephemeris file: %s.\n",fileName);
+       orbfit_error("Unable to open ephemeris file: %s", fileName);
        return FAILURE;
      }
-  else 
-     { /*.................Read first three header records from ephemeris file */
-         
-       fread(&H1,sizeof(double),ARRAY_SIZE,Ephemeris_File);
-       fread(&H2,sizeof(double),ARRAY_SIZE,Ephemeris_File);
-       fread(&Coeff_Array,sizeof(double),ARRAY_SIZE,Ephemeris_File);
-       
-       /*...............................Store header data in global variables */
-       
-       R1 = H1.data;
-              
-       /*..........................................Set current time variables */
 
-       T_beg  = Coeff_Array[0];
-       T_end  = Coeff_Array[1];
-       T_span = T_end - T_beg;
-
-       /*..............................Convert header ephemeris ID to integer */
-
-       headerID = (int) R1.DENUM;
-       
-       /*..............................................Debug Print (optional) */
-
-       if ( Debug ) 
-          {
-            printf("\n  In: Initialize_Ephemeris \n");
-            printf("\n      ARRAY_SIZE = %4d",ARRAY_SIZE);
-            printf("\n      headerID   = %3d",headerID);
-            printf("\n      T_Beg      = %7.3f",T_beg);
-            printf("\n      T_End      = %7.3f",T_end);
-            printf("\n      T_Span     = %7.3f\n\n",T_span);
-          }
-
-       /*..................................................Return status code */
-       
-       if ( headerID == EPHEMERIS ) 
-          {
-            return SUCCESS;
-          }
-       else 
-          {
-            printf("\n Opened wrong file: %s",fileName);
-            printf(" for ephemeris: %d.\n",EPHEMERIS);
-            return FAILURE;
-          }
+  /* Read the two header records and the first coefficient record */
+  if (fread(&H1,sizeof(double),ARRAY_SIZE,Ephemeris_File) != ARRAY_SIZE
+      || fread(&H2,sizeof(double),ARRAY_SIZE,Ephemeris_File) != ARRAY_SIZE
+      || fread(&Coeff_Array,sizeof(double),ARRAY_SIZE,Ephemeris_File) != ARRAY_SIZE)
+     {
+       orbfit_error("Error reading header of ephemeris file: %s", fileName);
+       goto fail;
      }
+
+  R1 = H1.data;
+  T_beg  = Coeff_Array[0];
+  T_end  = Coeff_Array[1];
+  T_span = T_end - T_beg;
+  headerID = (int) R1.DENUM;
+
+  if ( Debug ) 
+     {
+       fprintf(stderr,"\n  In: Initialize_Ephemeris \n");
+       fprintf(stderr,"\n      ARRAY_SIZE = %4d",ARRAY_SIZE);
+       fprintf(stderr,"\n      headerID   = %3d",headerID);
+       fprintf(stderr,"\n      T_Beg      = %7.3f",T_beg);
+       fprintf(stderr,"\n      T_End      = %7.3f",T_end);
+       fprintf(stderr,"\n      T_Span     = %7.3f\n\n",T_span);
+     }
+
+  if ( headerID != EPHEMERIS )
+     {
+       orbfit_error("Opened wrong file: %s for ephemeris: %d",
+		    fileName, EPHEMERIS);
+       goto fail;
+     }
+  if (!(T_span > 0.))
+     {
+       orbfit_error("Bad record time span in ephemeris file: %s", fileName);
+       goto fail;
+     }
+  if (fseek(Ephemeris_File, 0L, SEEK_END) != 0
+      || (file_bytes = ftell(Ephemeris_File)) < 0
+      || (N_records = file_bytes/record_bytes - 2) < 1)
+     {
+       orbfit_error("Error sizing ephemeris file: %s", fileName);
+       goto fail;
+     }
+
+  T_first = T_beg;
+  Record_span = T_span;
+  Ephemeris_ready = 1;
+  return SUCCESS;
+
+fail:
+  fclose(Ephemeris_File);
+  Ephemeris_File = NULL;
+  T_beg = T_end = T_span = 0.;
+  return FAILURE;
 }
 
 /**==========================================================================**/
@@ -389,7 +371,7 @@ double utc_jd_to_tt(double jd_utc)
 /**                                                                          **/
 /**==========================================================================**/
 
-void Interpolate_Position( double Time , int Target , double Position[3] )
+static void Interpolate_Position( double Time , int Target , double Position[3] )
 {
   double    A[50] , Cp[50]  , sum[3] , T_break , T_seg , T_sub , Tc;
   int       i , j;
@@ -400,11 +382,8 @@ void Interpolate_Position( double Time , int Target , double Position[3] )
   /* This function doesn't "do" nutations or librations.                      */
   /*--------------------------------------------------------------------------*/
 
-  if ( Target >= 11 )             /* Also protects against weird input errors */
-     {
-       printf("\n This function does not compute nutations or librations.\n");
-       return;
-     }
+  if ( Target < 0 || Target >= 11 )  /* Also protects against weird input */
+     orbfit_fail("Ephemeris target %d is not a body position", Target);
  
   /*--------------------------------------------------------------------------*/
   /* Initialize local coefficient array.                                      */
@@ -433,11 +412,11 @@ void Interpolate_Position( double Time , int Target , double Position[3] )
 
   if ( Debug )
      {
-       printf("\n  In: Interpolate_Position\n");
-       printf("\n  Target = %2d",Target);
-       printf("\n  C      = %4ld (before)",C);
-       printf("\n  N      = %4ld",N);
-       printf("\n  G      = %4ld\n",G);
+       fprintf(stderr,"\n  In: Interpolate_Position\n");
+       fprintf(stderr,"\n  Target = %2d",Target);
+       fprintf(stderr,"\n  C      = %4ld (before)",C);
+       fprintf(stderr,"\n  N      = %4ld",N);
+       fprintf(stderr,"\n  G      = %4ld\n",G);
      }
 
   /*--------------------------------------------------------------------------*/
@@ -474,26 +453,24 @@ void Interpolate_Position( double Time , int Target , double Position[3] )
        for (i=C ; i<(C+3*N) ; i++) A[i-C] = Coeff_Array[i];
      }
   else                                   /* Something has gone terribly wrong */
-     {
-       printf("\n Number of granules must be >= 1: check header data.\n");
-     }
+     orbfit_fail("Number of ephemeris granules must be >= 1: check header data");
 
   /*...................................................Debug print (optional) */
 
   if ( Debug )
      {
-       printf("\n  C      = %4ld (after)",C);
-       printf("\n  offset = %4ld",offset);
-       printf("\n  Time   = %12.7f",Time);
-       printf("\n  T_sub  = %12.7f",T_sub);
-       printf("\n  T_seg  = %12.7f",T_seg);
-       printf("\n  Tc     = %12.7f\n",Tc);
-       printf("\n  Array Coefficients:\n");
+       fprintf(stderr,"\n  C      = %4ld (after)",C);
+       fprintf(stderr,"\n  offset = %4ld",offset);
+       fprintf(stderr,"\n  Time   = %12.7f",Time);
+       fprintf(stderr,"\n  T_sub  = %12.7f",T_sub);
+       fprintf(stderr,"\n  T_seg  = %12.7f",T_seg);
+       fprintf(stderr,"\n  Tc     = %12.7f\n",Tc);
+       fprintf(stderr,"\n  Array Coefficients:\n");
        for ( i=0 ; i<3*N ; i++ )
            {
-             printf("\n  A[%2d] = % 22.15e",i,A[i]);
+             fprintf(stderr,"\n  A[%2d] = % 22.15e",i,A[i]);
            }
-       printf("\n\n");
+       fprintf(stderr,"\n\n");
      }
 
   /*..........................................................................*/
@@ -519,12 +496,12 @@ void Interpolate_Position( double Time , int Target , double Position[3] )
   return;
 }
 
-void Interpolate_State(double Time, 
+static void Interpolate_State(double Time, 
 		       int Target, 
 		       double Position[3], 
 		       double Velocity[3])
 {
-  double    A[50]   , B[50] , Cp[50] , P_Sum[3] , V_Sum[3] , Up[50] ,
+  double    A[50]   , Cp[50] , P_Sum[3] , V_Sum[3] , Up[50] ,
             T_break , T_seg , T_sub  , Tc;
   int       i , j;
   long int  C , G , N , offset = 0;
@@ -535,11 +512,8 @@ void Interpolate_State(double Time,
   /* This function doesn't "do" nutations or librations.                      */
   /*--------------------------------------------------------------------------*/
 
-  if ( Target >= 11 )             /* Also protects against weird input errors */
-     {
-       printf("\n This function does not compute nutations or librations.\n");
-       return;
-     }
+  if ( Target < 0 || Target >= 11 )  /* Also protects against weird input */
+     orbfit_fail("Ephemeris target %d is not a body position", Target);
 
   /*--------------------------------------------------------------------------*/
   /* Initialize local coefficient array.                                      */
@@ -548,7 +522,6 @@ void Interpolate_State(double Time,
   for ( i=0 ; i<50 ; i++ )
       {
         A[i] = 0.0;
-        B[i] = 0.0;
       }
 
   /*--------------------------------------------------------------------------*/
@@ -569,11 +542,11 @@ void Interpolate_State(double Time,
 
   if ( Debug )
      {
-       printf("\n  In: Interpolate_State\n");
-       printf("\n  Target = %2d",Target);
-       printf("\n  C      = %4ld (before)",C);
-       printf("\n  N      = %4ld",N);
-       printf("\n  G      = %4ld\n",G);
+       fprintf(stderr,"\n  In: Interpolate_State\n");
+       fprintf(stderr,"\n  Target = %2d",Target);
+       fprintf(stderr,"\n  C      = %4ld (before)",C);
+       fprintf(stderr,"\n  N      = %4ld",N);
+       fprintf(stderr,"\n  G      = %4ld\n",G);
      }
 
   /*--------------------------------------------------------------------------*/
@@ -610,26 +583,24 @@ void Interpolate_State(double Time,
        for (i=C ; i<(C+3*N) ; i++) A[i-C] = Coeff_Array[i];
      }
   else                                   /* Something has gone terribly wrong */
-     {
-       printf("\n Number of granules must be >= 1: check header data.\n");
-     }
+     orbfit_fail("Number of ephemeris granules must be >= 1: check header data");
 
   /*...................................................Debug print (optional) */
 
   if ( Debug )
      {
-       printf("\n  C      = %4ld (after)",C);
-       printf("\n  offset = %4ld",offset);
-       printf("\n  Time   = %12.7f",Time);
-       printf("\n  T_sub  = %12.7f",T_sub);
-       printf("\n  T_seg  = %12.7f",T_seg);
-       printf("\n  Tc     = %12.7f\n",Tc);
-       printf("\n  Array Coefficients:\n");
+       fprintf(stderr,"\n  C      = %4ld (after)",C);
+       fprintf(stderr,"\n  offset = %4ld",offset);
+       fprintf(stderr,"\n  Time   = %12.7f",Time);
+       fprintf(stderr,"\n  T_sub  = %12.7f",T_sub);
+       fprintf(stderr,"\n  T_seg  = %12.7f",T_seg);
+       fprintf(stderr,"\n  Tc     = %12.7f\n",Tc);
+       fprintf(stderr,"\n  Array Coefficients:\n");
        for ( i=0 ; i<3*N ; i++ )
            {
-             printf("\n  A[%2d] = % 22.15e",i,A[i]);
+             fprintf(stderr,"\n  A[%2d] = % 22.15e",i,A[i]);
            }
-       printf("\n\n");
+       fprintf(stderr,"\n\n");
      }
 
   /*..........................................................................*/
@@ -683,7 +654,7 @@ geocenter_ssbary(double jd,
   int i;
 
   if (!init) {
-    if (Initialize_Ephemeris()) exit(1);
+    if (Initialize_Ephemeris()) orbfit_rethrow();
     init = 1;
   }
 
@@ -704,7 +675,7 @@ geocenter_ssbary(double jd,
 #define  FLATTEN           0.003352813   /* flattening of earth, 1/298.257 */
 #define  EQUAT_RAD         6378137.    /* equatorial radius of earth, meters */
 
-double 
+static double 
 lst(double jd,
     double longit)
 {
@@ -741,7 +712,7 @@ lst(double jd,
 	return(sid_g);
 }
 
-void 
+static void 
 topo(double lmst, double rhocos, double rhosin,
 	double *x_geo, double *y_geo, double *z_geo)
 /* computes the geocentric equatorial vector (AU) of a site from its
@@ -881,9 +852,8 @@ observatory_geocenter(double jd,
 }
 
 
-/* Copy columns [start, end) of a line, or fewer if the line is short */
-static void
-column(const char *line, int start, int end, char *out)
+void
+copy_columns(const char *line, int start, int end, char *out)
 {
   int n = strcspn(line, "\r\n");
   if (n<start) {
@@ -891,7 +861,7 @@ column(const char *line, int start, int end, char *out)
     return;
   }
   if (end>n) end=n;
-  strncpy(out, line+start, end-start);
+  memcpy(out, line+start, end-start);
   out[end-start]=0;
 }
 
@@ -930,10 +900,8 @@ read_observatories(char *fname)
   fileName[FNAMESIZE-1]=0;
   /* fprintf(stderr,"Loading from %s\n", fileName); */
 
-  if ((sitefile = fopen(fileName,"r"))==NULL) {
-    fprintf(stderr,"Error opening observatories file %s\n",fileName);
-    exit(1);
-  }
+  if ((sitefile = fopen(fileName,"r"))==NULL)
+    orbfit_fail("Error opening observatories file %s",fileName);
 
   while (fgets_nocomment(inbuff, BUFFSIZE-1, sitefile, NULL)!=NULL) {
     SITE *sss;
@@ -941,28 +909,30 @@ read_observatories(char *fname)
     int nlon, ncos, nsin;
     char *eol;
 
-    column(inbuff, 0, 3, code);
+    copy_columns(inbuff, 0, 3, code);
     if ((obscode = obscode_from_string(code))==OBSCODE_INVALID) continue;
     if (strchr(inbuff, ':')!=NULL && strchr(inbuff, ':') < inbuff+30) {
-      fprintf(stderr,"Observatories file %s is not in the MPC ObsCodes format:\n->%s\n",
-	      fileName, inbuff);
-      exit(1);
+      orbfit_error("Observatories file %s is not in the MPC ObsCodes format:\n->%s",
+		   fileName, inbuff);
+      goto fail;
     }
 
     if (nsites>=maxsites) {
       maxsites = maxsites ? 2*maxsites : 1024;
-      if ((sitelist = realloc(sitelist, maxsites*sizeof(SITE)))==NULL) {
-	fprintf(stderr,"Out of memory reading observatories file %s\n", fileName);
-	exit(1);
+      SITE *grown = realloc(sitelist, maxsites*sizeof(SITE));
+      if (grown==NULL) {
+	orbfit_error("Out of memory reading observatories file %s", fileName);
+	goto fail;
       }
+      sitelist = grown;
     }
     sss = &(sitelist[nsites]);
     sss->code = obscode;
     sss->warned = 0;
 
-    column(inbuff, 4, 13, lonstring);
-    column(inbuff, 13, 21, cosstring);
-    column(inbuff, 21, 30, sinstring);
+    copy_columns(inbuff, 4, 13, lonstring);
+    copy_columns(inbuff, 13, 21, cosstring);
+    copy_columns(inbuff, 21, 30, sinstring);
     nlon = sscanf(lonstring, "%lf", &lon);
     ncos = sscanf(cosstring, "%lf", &(sss->rhocos));
     nsin = sscanf(sinstring, "%lf", &(sss->rhosin));
@@ -973,22 +943,31 @@ read_observatories(char *fname)
       sss->space = 1;
       sss->lon = sss->rhocos = sss->rhosin = 0.;
     } else {
-      fprintf(stderr,"Bad line in observatories file %s:\n->%s\n",
-	      fileName, inbuff);
-      exit(1);
+      orbfit_error("Bad line in observatories file %s:\n->%s",
+		   fileName, inbuff);
+      goto fail;
     }
 
-    column(inbuff, 30, 30+79, sss->name);
+    copy_columns(inbuff, 30, 30+79, sss->name);
     for (eol=sss->name+strlen(sss->name); eol>sss->name && isspace((unsigned char) eol[-1]); eol--) ;
     *eol = 0;
     nsites++;
   }
   fclose(sitefile);
-  
+
   if (nsites<1) {
-    fprintf(stderr,"Error: no observatory sites found\n");
-    exit(1);
+    free(sitelist);
+    sitelist = NULL;
+    orbfit_fail("No observatory sites found in %s", fileName);
   }
+  return;
+
+fail:
+  fclose(sitefile);
+  nsites = 0;
+  free(sitelist);
+  sitelist = NULL;
+  orbfit_rethrow();
 }
 
 /* Get arbitrary planetary barycenter position.  Get the
@@ -1004,7 +983,7 @@ bodycenter_ssbary(double jd,
   int i;
 
   if (!init) {
-    if (Initialize_Ephemeris()) exit(1);
+    if (Initialize_Ephemeris()) orbfit_rethrow();
     init = 1;
   }
 
