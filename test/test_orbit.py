@@ -92,15 +92,18 @@ class OrbitFit(unittest.TestCase):
 
     def test_abg_load(self):
         """
-        Test that loading an abg file returns the same results as calling fit_radec
+        Test that loading an abg file returns the same results as calling fit_radec.
+        The abg file is written at full precision, so the fit on another
+        platform can differ from it in the last few bits.
         :return:
         """
 
         orbit1 = mp_ephem.BKOrbit(self.observations, abg_file=self.abg_filename)
         orbit2 = mp_ephem.BKOrbit(self.observations)
         for attr in ['a', 'e', 'Node', 'inc', 'om', 'T', 'distance']:
-            self.assertEqual(getattr(orbit1, attr),
-                             getattr(orbit2, attr))
+            value1 = getattr(orbit1, attr).value
+            value2 = getattr(orbit2, attr).value
+            self.assertAlmostEqual(value1, value2, delta=1e-10 * abs(value2), msg=attr)
 
     def test_OSSOSParser(self):
         mpc_line = " O13BL3UV     C2013 08 02.50855 01 00 04.549+04 59 01.53         24.3 r      568 O 1645236p27 L3UV Y 106.35 4301.85 0.20 0 24.31 0.15 % hurrah!"
