@@ -46,10 +46,12 @@ put them in the binary format using some programs I acquired.  I have
 put these together into a separate tar file, called DE405C.tar.gz.
 
 Also included is a file "observatories.dat" which contains locations
-of various observatories and their standard MPC codes.  The format
-should be pretty obvious if you need to add more.  There is now a
-facility for specifying orbiting observatories, see update.tex for
-more information.
+of various observatories and their standard MPC codes.  It is a copy
+of the MPC list at https://minorplanetcenter.net/iau/lists/ObsCodes.html
+and can be refreshed by saving that page as text.  Space observatories
+(e.g. 250, Hubble) have no longitude or parallax constants; their
+positions must be supplied with each observation (MPC two-line
+satellite records), otherwise the geocenter is used.
 
 By default, the programs will look for the observatory and ephemeris
 data files under the names "observatories.dat" and "binEphem.405" in
@@ -118,8 +120,8 @@ Here you can use as many digits as you like in each field, you just
 need to insure that your RA & Dec don't have any spaces in them.
 ERROR is the uncertainty (in arcseconds) in each the RA & Dec of this
 observation. 
-OBSCODE is the observatory code, as used by the MPC.  The code must
-be in the "observatories.dat" file in order to be used.
+OBSCODE is the observatory code, as used by the MPC (e.g. 568 or T14).
+The code must be in the "observatories.dat" file in order to be used.
 
 (c) enter using a date:
 YYYY MM DD.DDDDD HH:MM:SS.SS +DD:MM:SS.SS ERROR OBSCODE

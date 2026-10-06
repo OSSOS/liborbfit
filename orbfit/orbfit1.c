@@ -210,6 +210,7 @@ int scan_observation(char *inbuff, OBSERVATION *obs, OBSERVATION *previous)
 {
   char rastring[80],decstring[80],*endptr;
   char two_line_flag[80]; // if set then this is the 2nd line of a two line MPC entry
+  char codestring[16];
   double jd;
   extern double dmsdeg(char *string);
   extern double hmsdeg(char *string);
@@ -234,31 +235,34 @@ int scan_observation(char *inbuff, OBSERVATION *obs, OBSERVATION *previous)
     }
     strncpy(rastring,inbuff+32,11);
     strncpy(decstring,inbuff+44,11);
-    sscanf(inbuff+77,"%3d",&(obs->obscode));
+    sscanf(inbuff+77,"%3s",codestring);
+    obs->obscode = obscode_from_string(codestring);
     obs->dthetay = mpc_dtheta;
     
   } else if (jd<10000.) {
       /* See if perhaps this was y/m/d instead of JD: */
       struct date_time dd;
-      if (sscanf(inbuff, "%d %d %f %s %s %lf %d",
+      if (sscanf(inbuff, "%d %d %f %s %s %lf %15s",
                  &(dd.y), &(dd.mo), &(dd.d), rastring, decstring,
                  &(obs->dthetay),
-                 &(obs->obscode)) != 7) {
+                 codestring) != 7) {
           fprintf(stderr, "Format error in observation file:\n ->%s\n", inbuff);
           return (1);
       }
+      obs->obscode = obscode_from_string(codestring);
       dd.h = dd.mn = dd.s = 0.;
       jd = date_to_jd(dd);
   } else {
       if (sscanf(inbuff, "%lf %s %s %lf %lf %lf %lf",
                  &jd, rastring, decstring, &(obs->dthetay), &(obs->xe), &(obs->ye), &(obs->ze)) != 7) {
-          if (sscanf(inbuff, "%lf %s %s %lf %d",
+          if (sscanf(inbuff, "%lf %s %s %lf %15s",
                      &jd, rastring, decstring,
                      &(obs->dthetay),
-                     &(obs->obscode)) != 5) {
+                     codestring) != 5) {
               fprintf(stderr, "Format error in observation file:\n ->%s\n", inbuff);
               return (1);
           }
+          obs->obscode = obscode_from_string(codestring);
       } else {
           /* Convert strings to ra & dec */
           /* fprintf(stderr,"%s -> %lf %lf %lf\n", inbuff, obs->xe, obs->ye, obs->ze); */
@@ -1068,7 +1072,10 @@ zenith_angle(OBSERVATION *obs)
 int
 is_visible(OBSERVATION *obs)
 {
-  return zenith_angle(obs) < zenith_horizon(obs->obscode);
+  double horizon = zenith_horizon(obs->obscode);
+  /* zenith_angle() is undefined without a fixed observatory location */
+  if (horizon>=PI) return 1;
+  return zenith_angle(obs) < horizon;
 }
 
 #include <sys/time.h>
